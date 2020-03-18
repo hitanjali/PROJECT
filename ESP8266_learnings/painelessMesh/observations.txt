@@ -1,0 +1,195 @@
+========================================================================================================================
+Exp 1 : 
+========================================================================================================================
+
+	a. Topology : One root node and two leaf nodes. 
+	b. Root node :
+			1. Configured as root and contains root is true.
+			2. Channel hard coded to 6
+			3. Wifi mode hard coded to WIFI_STA_AP mode
+			
+	c. Leaf Nodes : 
+			1. Contains root is true. 
+			2. Channel hard coded to 6
+			3. Wifi mode hard coded to WIFI_STA_AP mode
+	d. MQTT Box : 
+			1. Publish to painlessMesh/to/boradcast 
+			2. Publish to painlessMesh/to/<node_id_1>
+			3. Publish to painlessMesh/to/<node_id_2>
+			4. Subscribe to painlessMesh/from/<node_id_1>
+			5. Subscribe to painlessMesh/from/<node_id_2>
+
+Obs 1 : 
+	a. Root Node : 
+			1. On serial monitor : Gets messages from all the leaf nodes. 
+
+	b. Leaf Node : 
+			1. On serial monitor : Gets messages from all other the leaf nodes.
+			2. On serial monitor : Recieves correctly from the published messages to the topic painlessMesh/to/broadcast
+			3. On serial monitor : Recieves correctly from the published messages to the topic painlessMesh/to/<own node id>  
+			4. On serial monitor : Does not recieve from the published messages to the topic painlessMesh/to/<other node ids>  
+						
+
+	c. MQTT Box : Chrome plugin : 
+			1. Recieves correctly from the published messages to the topic painlessMesh/from/<node_id_x>
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Conclusion : All the leaf nodes and root nodes are working with channel 6 and seems to be working correct
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+========================================================================================================================
+Exp 2 : 
+========================================================================================================================
+
+	a. Topology : One root node and two leaf nodes. 
+	b. Root node :
+			1. Configured as root and contains root is true.
+			2. Channel hard coded to 4
+			3. Wifi mode hard coded to WIFI_STA_AP mode
+			
+	c. Leaf Nodes : 
+			1. Contains root is true. 
+			2. CHANNEL SET TO DEFAULT i.e. 1 *****
+			3. Wifi mode hard coded to WIFI_STA_AP mode
+	d. MQTT Box : 
+			1. Publish to painlessMesh/to/boradcast 
+			2. Publish to painlessMesh/to/<node_id_1>
+			3. Publish to painlessMesh/to/<node_id_2>
+			4. Subscribe to painlessMesh/from/<node_id_1>
+			5. Subscribe to painlessMesh/from/<node_id_2>
+
+Obs 1 : 
+	a. Root Node : 
+			1. On serial monitor : Gets messages from all the leaf nodes. 
+
+	b. Leaf Node : 
+			1. On serial monitor : Gets messages from all other the leaf nodes.
+			2. On serial monitor : Recieves correctly from the published messages to the topic painlessMesh/to/broadcast
+			3. On serial monitor : Recieves correctly from the published messages to the topic painlessMesh/to/<own node id>  
+			4. On serial monitor : Does not recieve from the published messages to the topic painlessMesh/to/<other node ids>  
+						
+
+	c. MQTT Box : Chrome plugin : 
+			1. Recieves correctly from the published messages to the topic painlessMesh/from/<node_id_x>
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Conclusion : 	The intial settling period is little bit more as the leaf nodes seems to be scannning and getting 
+		aligned to the channel of the root node i.e. 6. But once done all the operations are running OK.
+		If a node gets reset it may take more time to get aligned to the other nodes channel. 
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+========================================================================================================================
+Exp 3 : 
+========================================================================================================================
+
+	a. Topology : One root node and two leaf nodes. 
+	b. Root node :
+			1. Configured as root and contains root is true.
+			2. CHANNEL SET TO DEFAULT i.e. 1 ****
+			3. Wifi mode hard coded to WIFI_STA_AP mode
+			
+	c. Leaf Nodes : 
+			1. Contains root is true. 
+			2. CHANNEL SET TO DEFAULT i.e. 1 *****
+			3. Wifi mode hard coded to WIFI_STA_AP mode
+	d. MQTT Box : 
+			1. Publish to painlessMesh/to/boradcast 
+			2. Publish to painlessMesh/to/<node_id_1>
+			3. Publish to painlessMesh/to/<node_id_2>
+			4. Subscribe to painlessMesh/from/<node_id_1>
+			5. Subscribe to painlessMesh/from/<node_id_2>
+
+Obs 1 : 
+	a. Root Node : 
+			1. On serial monitor : Gets messages from all the leaf nodes. 
+
+	b. Leaf Node : 
+			1. On serial monitor : Gets messages from all other the leaf nodes.
+			2. On serial monitor : Recieves correctly from the published messages to the topic painlessMesh/to/broadcast
+			3. On serial monitor : Recieves correctly from the published messages to the topic painlessMesh/to/<own node id>  
+			4. On serial monitor : Does not recieve from the published messages to the topic painlessMesh/to/<other node ids>  
+						
+
+	c. MQTT Box : Chrome plugin : 
+			1. Recieves correctly from the published messages to the topic painlessMesh/from/<node_id_x>
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Conclusion : 	The root node seems to be running on channel 6 by default [ assuming by seeing the following log on root]
+
+		CONNECTION: scanComplete(): Scan finished
+		CONNECTION: scanComplete():-- > Cleared old APs.
+		CONNECTION: scanComplete(): num = 6
+
+
+		NOT SURE IF THE MESSAGE ABOVE STATES THE CHANNEL NUMBER
+
+		The intial settling period is little bit more as the leaf nodes seems to be scannning and getting 
+		aligned to the channel of the root node. But once done all the operations are running OK.
+		If a node gets reset it may take more time to get aligned to the other nodes channel. 
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+
+========================================================================================================================
+Exp 4 : 
+========================================================================================================================
+
+	a. Topology : One root node and two leaf nodes. 
+	b. Root node :
+			1. Configured as root and contains root is true.
+			2. CHANNEL SET TO 8
+			3. Wifi mode hard coded to WIFI_STA_AP mode
+			
+	c. Leaf Nodes : 
+			1. Contains root is true. 
+			2. One of the leaf node : CHANNEL SET TO DEFAULT i.e. 1 *****
+			2. One of the leaf node : CHANNEL SET TO 4
+			3. Wifi mode hard coded to WIFI_STA_AP mode
+	d. MQTT Box : 
+			1. Publish to painlessMesh/to/boradcast 
+			2. Publish to painlessMesh/to/<node_id_1>
+			3. Publish to painlessMesh/to/<node_id_2>
+			4. Subscribe to painlessMesh/from/<node_id_1>
+			5. Subscribe to painlessMesh/from/<node_id_2>
+
+Obs 1 : 
+	a. Root Node : 
+			1. On serial monitor : Gets messages from all the leaf nodes. 
+
+	b. Leaf Node : 
+			1. On serial monitor : Gets messages from all other the leaf nodes.
+			2. On serial monitor : Recieves correctly from the published messages to the topic painlessMesh/to/broadcast
+			3. On serial monitor : Recieves correctly from the published messages to the topic painlessMesh/to/<own node id>  
+			4. On serial monitor : Does not recieve from the published messages to the topic painlessMesh/to/<other node ids>  
+						
+
+	c. MQTT Box : Chrome plugin : 
+			1. Recieves correctly from the published messages to the topic painlessMesh/from/<node_id_x>
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Conclusion : 	The root node state intially channel 8 but then shifts to channel 6. And then the leaf nodes
+
+
+
+		CONNECTION: scanComplete(): Scan finished
+		CONNECTION: scanComplete():-- > Cleared old APs.
+		CONNECTION: scanComplete(): num = 8
+		....
+		....
+		....
+
+		CONNECTION: scanComplete(): Scan finished
+		CONNECTION: scanComplete():-- > Cleared old APs.
+		CONNECTION: scanComplete(): num = 6
+
+		NOT SURE IF THE MESSAGE ABOVE STATES THE CHANNEL NUMBER
+
+		aligned to the channel of the root node. But once done all the operations are running OK.
+		If a node gets reset it may take more time to get aligned to the other nodes channel. 
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+MAJOR : It seems if the leaf nodes know that there is a root in the node , it seems they align their Wifi channel to 
+	that of the root node.
+	
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
