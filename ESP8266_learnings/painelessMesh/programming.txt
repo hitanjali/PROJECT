@@ -1,0 +1,36 @@
+========================================================================================================================
+Connections : 
+========================================================================================================================
+
+Pull up/down R = 10K
+
+TXD0   - RXD of FTDI / UART
+RXD0   - TXD of FTDI / UART
+
+GPIO2  - Pulled Up
+GPIO15 - Pulled down.
+EN     - Pulled up
+
+GPIO0  : Pulled up with a push button Switch other end connected to GND.  
+RST    : Pulled up with a push button Switch other end connected to GND.  
+
+VCC    : 3.3V
+GND
+========================================================================================================================
+To Enter the UART floash programming mode : 
+========================================================================================================================
+
+GPIO0 - Push to GND
+RST   - Push to GND 
+RST   - Release to VCC
+GPIO0 - Release to VCC
+
+This will cause the ESP8266 to enter into UART mode. 
+Remains in the UART programming mode till RST is pulled low.
+
+There are references that tell you need to pull GPIO0 and RST just at the time of uploading through arduino IDE
+PN : This is not required. As the device remain the the UART mode till the next reset.
+
+Ref : 
+https://www.instructables.com/id/ESP-12F-ESP8266-Module-Minimal-Breadboard-for-Flas/
+========================================================================================================================

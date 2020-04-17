@@ -101,6 +101,7 @@ void receivedCallback( const uint32_t &from, const String &msg ) {
   String topic = "painlessMesh/from/" + String(from);
   // mqttClient.publish(topic.c_str(), msg.c_str());
   // Put the message to the firebase corresponding node
+  firebaseSetstatus(msg);
 }
 
 // Get message from the firebase and borascast/send to corresponsing node
@@ -128,6 +129,21 @@ void firebaseGetmsg () {
   }
 
 
+}
+
+void firebaseSetstatus (String status ) {
+
+ if(Firebase.setString(firebaseData, "/nodes/node2/power", status))
+  {
+    //Success
+     Serial.println("Set status data success");
+
+  }else{
+    //Failed?, get the error reason from firebaseData
+
+    Serial.print("Error in setString, ");
+    Serial.println(firebaseData.errorReason());
+  }
 }
 
 /*
