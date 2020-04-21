@@ -5,32 +5,58 @@
 #define ERASE_PIN 5
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
-#include <Arduino.h>
 #include <painlessMesh.h>
-#include <PubSubClient.h>
-#include <WiFiClient.h>
 
 #define   MESH_PREFIX     "matrix"
 #define   MESH_PASSWORD   "therisnospoon"
 #define   MESH_PORT       5555
 
-#define   STATION_SSID     "dada100"
-#define   STATION_PASSWORD "dada2020"
 
-#define HOSTNAME "MQTT_Bridge"
-
-// Prototypes
-void receivedCallback( const uint32_t &from, const String &msg );
-void mqttCallback(char* topic, byte* payload, unsigned int length);
-
-IPAddress getlocalIP();
-
-IPAddress myIP(0,0,0,0);
-//IPAddress mqttBroker(broker.hivemq.com);
-
+Scheduler userScheduler; // to control your personal task
 painlessMesh  mesh;
-WiFiClient wifiClient;
-PubSubClient mqttClient("broker.hivemq.com", 1883, mqttCallback, wifiClient);
+
+String status = "NULL";
+
+// User stub
+void sendMessage() ; // Prototype so PlatformIO doesn't complain
+
+Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
+
+void sendMessage() {
+  String msg = String(status + " : ");
+  msg += mesh.getNodeId();
+  mesh.sendBroadcast( msg );
+  taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
+}
+
+// Needed for painless library
+void receivedCallback( uint32_t from, String &msg ) {
+  Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
+
+  if ( msg == "ON")
+  {
+  	digitalWrite(LED_BUILTIN,LOW); //For ESP8266 1=0
+	  status = "ON";
+  }
+  else if (msg == "OFF")
+  {
+  	digitalWrite(LED_BUILTIN,HIGH); //For ESP8266 1=0
+	  status = "OFF";
+  }
+
+}
+
+void newConnectionCallback(uint32_t nodeId) {
+    Serial.printf("--> startHere: New Connection, nodeId = %u\n", nodeId);
+}
+
+void changedConnectionCallback() {
+    Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
+}
+
+void nodeTimeAdjustedCallback(int32_t offset) {
+    Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
+}
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
 
@@ -54,9 +80,6 @@ const int MPW_LENGTH_ADDR  = 112;
 const int MPW_STATUS_ADDR  = 113;
 
 const int EEPROM_END_ADDR = 128;
-
-String rtrssid     = STATION_SSID;
-String rtrpwd      = STATION_PASSWORD;
 
 String mid         = MESH_PREFIX;
 String mpw         = MESH_PASSWORD;
@@ -82,14 +105,11 @@ void setup() {
    	if(!erase_eeprom()) 
 		Serial.println("Erase failed ");;
    }
-   else if ((EEPROM.read(MID_STATUS_ADDR)==1)  && (EEPROM.read(MPW_STATUS_ADDR)==1) && 
-            (EEPROM.read(SSID_STATUS_ADDR)==1) && (EEPROM.read(PASS_STATUS_ADDR)==1)) {
+   else if ((EEPROM.read(MID_STATUS_ADDR)==1)  && (EEPROM.read(MPW_STATUS_ADDR)==1)) {  
    	mid     = eeprom_read_idpw(MID_START_ADDR,MID_LENGTH_ADDR);
    	mpw     = eeprom_read_idpw(MPW_START_ADDR,MPW_LENGTH_ADDR);
-   	rtrssid = eeprom_read_idpw(SSID_START_ADDR,SSID_LENGTH_ADDR);
-   	rtrpwd  = eeprom_read_idpw(PASS_START_ADDR,PASS_LENGTH_ADDR);
 	ap_mode = 0; // Run the mesh code 
-	root_node_setup();
+	leaf_node_setup();
    }
    else // if the mesh id and password not updated run the AP mode setup and the code
    {
@@ -107,7 +127,7 @@ void loop() {
 if(ap_mode)  
 	ap_mode_loop();
 else
-	root_mode_loop();
+	leaf_mode_loop();
 }
 
 
@@ -141,33 +161,23 @@ static int idpw_vector      = 0;
       mpw = update_id_pw(request);
       bitSet(idpw_vector,1);
   }
-  else if(request.indexOf("/rtrssid/") != -1) {
-      rtrssid = update_id_pw(request);
-      bitSet(idpw_vector,2);
-  }
-  else if(request.indexOf("/rtrpwd/") != -1) {
-      rtrpwd = update_id_pw(request);
-      bitSet(idpw_vector,3);
-  }
   else if(request.indexOf("/confirmed")!=-1) {
 
 	switch ( idpw_vector ) { 
 
-	case 15 : 
+	case 3 : 
 		// Write in to EEPROM and restart
 		Serial.println("Confirmation received , Restarting device in to mesh mode");
 		eeprom_write(mid,MID_START_ADDR,MID_LENGTH_ADDR,MID_STATUS_ADDR);
 		eeprom_write(mpw,MPW_START_ADDR,MPW_LENGTH_ADDR,MPW_STATUS_ADDR);
-		eeprom_write(rtrssid,SSID_START_ADDR,SSID_LENGTH_ADDR,SSID_STATUS_ADDR);
-		eeprom_write(rtrpwd,PASS_START_ADDR,PASS_LENGTH_ADDR,PASS_STATUS_ADDR);
   		client.flush();
 		delay(100);
 		ESP.restart();
 	break;
 	
 	default : 
-		Serial.println("Both Mesh and Router credentials [ID and PW] still not updated");
-		value = "Update both Router and Mesh credentials";
+		Serial.println("Both Mesh ID and PW still not updated");
+		value = "Update both Mesh ID and PW ";
 	break;
   	}
   }
@@ -191,7 +201,7 @@ static int idpw_vector      = 0;
 }
 
 //========================================================================================================================
-void root_mode_loop() {
+/* void root_mode_loop() {
   
   mesh.update();
   mqttClient.loop();
@@ -206,6 +216,11 @@ void root_mode_loop() {
     } 
   }
 
+} */
+//========================================================================================================================
+void leaf_mode_loop() { 
+  userScheduler.execute(); // it will run mesh scheduler as well
+  mesh.update();
 }
 
 //========================================================================================================================
@@ -278,7 +293,7 @@ void ap_mode_setup()
 }
 
 //========================================================================================================================
-void root_node_setup()
+/*void root_node_setup()
 {
    Serial.println("Entering root node setup");
    mesh.setDebugMsgTypes( ERROR | STARTUP | CONNECTION );  // set before init() so that you can see startup messages
@@ -294,6 +309,25 @@ void root_node_setup()
   mesh.setRoot(true);
   // This and all other mesh should ideally now the mesh contains a root
   mesh.setContainsRoot(true);
+
+}*/
+
+//========================================================================================================================
+void leaf_node_setup() {
+
+  mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before init() so that you can see startup messages
+
+  mesh.init( mid , mpw , &userScheduler, mesh_port , WIFI_AP_STA, 6);
+  mesh.onReceive(&receivedCallback);
+  mesh.onNewConnection(&newConnectionCallback);
+  mesh.onChangedConnections(&changedConnectionCallback);
+  mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
+
+  userScheduler.addTask( taskSendMessage );
+  taskSendMessage.enable();
+  // This and all other mesh should ideally now the mesh contains a root
+  mesh.setContainsRoot(true);
+
 
 }
 
@@ -334,52 +368,5 @@ void eeprom_write(String idpw,int start_addr,int length_addr,int status_addr)
 	EEPROM.write(length_addr,length);
 	EEPROM.write(status_addr,1);
 	EEPROM.commit();
-}
-//========================================================================================================================
-
-void receivedCallback( const uint32_t &from, const String &msg ) {
-  Serial.printf("bridge: Received from %u msg=%s\n", from, msg.c_str());
-  String topic = "painlessMesh/from/" + String(from);
-  mqttClient.publish(topic.c_str(), msg.c_str());
-}
-
-//========================================================================================================================
-void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
-  char* cleanPayload = (char*)malloc(length+1);
-  payload[length] = '\0';
-  memcpy(cleanPayload, payload, length+1);
-  String msg = String(cleanPayload);
-  free(cleanPayload);
-
-  String targetStr = String(topic).substring(16);
-
-  if(targetStr == "gateway")
-  {
-     if(msg == "getNodes")
-     {
-       mqttClient.publish("painlessMesh/from/gateway", mesh.subConnectionJson().c_str());
-     }
-  }
-  else if(targetStr == "broadcast") 
-  {
-    mesh.sendBroadcast(msg);
-  }
-  else
-  {
-    uint32_t target = strtoul(targetStr.c_str(), NULL, 10);
-    if(mesh.isConnected(target))
-    {
-      mesh.sendSingle(target, msg);
-    }
-    else
-    {
-      mqttClient.publish("painlessMesh/from/gateway", "Client not connected!");
-    }
-  }
-}
-
-//========================================================================================================================
-IPAddress getlocalIP() {
-  return IPAddress(mesh.getStationIP());
 }
 //========================================================================================================================
