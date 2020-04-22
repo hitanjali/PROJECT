@@ -39,21 +39,26 @@ PubSubClient mqttClient("broker.hivemq.com", 1883, mqttCallback, wifiClient);
 const char* ssid = "RAW_MESH";
 const char* password = "j0espNathan"; // has to be longer than 7 chars
 
-const int SSID_START_ADDR  = 0;
-const int SSID_LENGTH_ADDR = 16;
-const int SSID_STATUS_ADDR = 17;
-const int PASS_START_ADDR  = 32;
-const int PASS_LENGTH_ADDR = 48;
-const int PASS_STATUS_ADDR = 49;
+const int SSID_START  = 0;
+const int SSID_LENGTH = 16;
+const int SSID_STATUS = 17;
+const int PASS_START  = 32;
+const int PASS_LENGTH = 48;
+const int PASS_STATUS = 49;
 
-const int MID_START_ADDR   = 64;
-const int MID_LENGTH_ADDR  = 80;
-const int MID_STATUS_ADDR  = 81;
-const int MPW_START_ADDR   = 96;
-const int MPW_LENGTH_ADDR  = 112;
-const int MPW_STATUS_ADDR  = 113;
+const int MID_START   = 64;
+const int MID_LENGTH  = 80;
+const int MID_STATUS  = 81;
+const int MPW_START   = 96;
+const int MPW_LENGTH  = 112;
+const int MPW_STATUS  = 113;
+const int LAST_STATE  = 114;
 
-const int EEPROM_END_ADDR = 128;
+const int EEPROM_END = 128;
+
+const int DEVICE1     = 4; // D2
+
+String status = "NULL";
 
 String rtrssid     = STATION_SSID;
 String rtrpwd      = STATION_PASSWORD;
@@ -72,7 +77,7 @@ WiFiServer server(80);
 void setup() {
 
    Serial.begin(115200);
-   EEPROM.begin(EEPROM_END_ADDR);
+   EEPROM.begin(EEPROM_END);
    pinMode(LED_BUILTIN, OUTPUT);
    pinMode(ERASE_PIN,INPUT);
 
@@ -82,12 +87,22 @@ void setup() {
    	if(!erase_eeprom()) 
 		Serial.println("Erase failed ");;
    }
-   else if ((EEPROM.read(MID_STATUS_ADDR)==1)  && (EEPROM.read(MPW_STATUS_ADDR)==1) && 
-            (EEPROM.read(SSID_STATUS_ADDR)==1) && (EEPROM.read(PASS_STATUS_ADDR)==1)) {
-   	mid     = eeprom_read_idpw(MID_START_ADDR,MID_LENGTH_ADDR);
-   	mpw     = eeprom_read_idpw(MPW_START_ADDR,MPW_LENGTH_ADDR);
-   	rtrssid = eeprom_read_idpw(SSID_START_ADDR,SSID_LENGTH_ADDR);
-   	rtrpwd  = eeprom_read_idpw(PASS_START_ADDR,PASS_LENGTH_ADDR);
+   else if ((EEPROM.read(MID_STATUS)==1)  && (EEPROM.read(MPW_STATUS)==1) && 
+            (EEPROM.read(SSID_STATUS)==1) && (EEPROM.read(PASS_STATUS)==1)) {
+
+	if (EEPROM.read(LAST_STATE)) {
+   		digitalWrite(DEVICE1, HIGH); // turn on
+		status = "ON";
+	}
+	else {
+   		digitalWrite(DEVICE1, LOW); // turn on
+		status = "OFF";
+	}
+
+   	mid     = eeprom_read_idpw(MID_START,MID_LENGTH);
+   	mpw     = eeprom_read_idpw(MPW_START,MPW_LENGTH);
+   	rtrssid = eeprom_read_idpw(SSID_START,SSID_LENGTH);
+   	rtrpwd  = eeprom_read_idpw(PASS_START,PASS_LENGTH);
 	ap_mode = 0; // Run the mesh code 
 	root_node_setup();
    }
@@ -156,10 +171,11 @@ static int idpw_vector      = 0;
 	case 15 : 
 		// Write in to EEPROM and restart
 		Serial.println("Confirmation received , Restarting device in to mesh mode");
-		eeprom_write(mid,MID_START_ADDR,MID_LENGTH_ADDR,MID_STATUS_ADDR);
-		eeprom_write(mpw,MPW_START_ADDR,MPW_LENGTH_ADDR,MPW_STATUS_ADDR);
-		eeprom_write(rtrssid,SSID_START_ADDR,SSID_LENGTH_ADDR,SSID_STATUS_ADDR);
-		eeprom_write(rtrpwd,PASS_START_ADDR,PASS_LENGTH_ADDR,PASS_STATUS_ADDR);
+		EEPROM.write(LAST_STATE,0);		
+		eeprom_write(mid,MID_START,MID_LENGTH,MID_STATUS);
+		eeprom_write(mpw,MPW_START,MPW_LENGTH,MPW_STATUS);
+		eeprom_write(rtrssid,SSID_START,SSID_LENGTH,SSID_STATUS);
+		eeprom_write(rtrpwd,PASS_START,PASS_LENGTH,PASS_STATUS);
   		client.flush();
 		delay(100);
 		ESP.restart();
@@ -202,6 +218,7 @@ void root_mode_loop() {
 
     if (mqttClient.connect("painlessMeshClient")) {
       mqttClient.publish("painlessMesh/from/gateway","Ready!");
+      mqttClient.publish("painlessMesh/from/gateway",status);
       mqttClient.subscribe("painlessMesh/to/#");
     } 
   }
@@ -237,7 +254,7 @@ unsigned long ini_time ;
 
 	if(erase) 
 	{
-		for(int i = 0 ; i < EEPROM_END_ADDR ; i++)
+		for(int i = 0 ; i < EEPROM_END ; i++)
 			EEPROM.write(i,0);
 		EEPROM.commit();
 		Serial.println("Restarting the device ...");
@@ -359,6 +376,25 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      {
        mqttClient.publish("painlessMesh/from/gateway", mesh.subConnectionJson().c_str());
      }
+     else if ( msg == "ON")
+     {
+         if(!EEPROM.read(LAST_STATE)) {
+           	EEPROM.write(LAST_STATE,1);
+           	EEPROM.commit();
+         }
+     	 digitalWrite(DEVICE1,HIGH); 
+         mqttClient.publish("painlessMesh/from/gateway", "ON");
+     }
+     else if (msg == "OFF")
+     {
+           if(EEPROM.read(LAST_STATE)) {
+           	EEPROM.write(LAST_STATE,0);
+           	EEPROM.commit();
+           }
+     	   digitalWrite(DEVICE1,LOW);
+           mqttClient.publish("painlessMesh/from/gateway", "OFF");
+     }
+	
   }
   else if(targetStr == "broadcast") 
   {
