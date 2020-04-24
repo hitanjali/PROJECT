@@ -11,8 +11,6 @@
 #define   MESH_PASSWORD   "therisnospoon"
 #define   MESH_PORT       5555
 
-const int DEVICE1     = 4; // D2
-const int LAST_STATE  = 114;
 
 Scheduler userScheduler; // to control your personal task
 painlessMesh  mesh;
@@ -24,49 +22,6 @@ void sendMessage() ; // Prototype so PlatformIO doesn't complain
 
 Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
-void sendMessage() {
-  String msg = String(status + " : ");
-  msg += mesh.getNodeId();
-  mesh.sendBroadcast( msg );
-  taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
-}
-
-// Needed for painless library
-void receivedCallback( uint32_t from, String &msg ) {
-  Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
-
-  if ( msg == "ON")
-  {
-	if(!EEPROM.read(LAST_STATE)) {
-		EEPROM.write(LAST_STATE,1);
-		EEPROM.commit();
-	}
-  	digitalWrite(DEVICE1,HIGH); //For ESP8266 1=0
-	status = "ON";
-  }
-  else if (msg == "OFF")
-  {
-	if(EEPROM.read(LAST_STATE)) {
-		EEPROM.write(LAST_STATE,0);
-		EEPROM.commit();
-	}
-  	digitalWrite(DEVICE1,LOW); //For ESP8266 1=0
-	status = "OFF";
-  }
-
-}
-
-void newConnectionCallback(uint32_t nodeId) {
-    Serial.printf("--> startHere: New Connection, nodeId = %u\n", nodeId);
-}
-
-void changedConnectionCallback() {
-    Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
-}
-
-void nodeTimeAdjustedCallback(int32_t offset) {
-    Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
-}
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
 
@@ -88,16 +43,16 @@ const int MID_STATUS  = 81;
 const int MPW_START   = 96;
 const int MPW_LENGTH  = 112;
 const int MPW_STATUS  = 113;
-
+const int LAST_STATE  = 114;
 
 const int EEPROM_END = 128;
 
+const int DEVICE1     = 4; // D2
 
 String mid         = MESH_PREFIX;
 String mpw         = MESH_PASSWORD;
 int    mesh_port   = MESH_PORT;
 String value       = "Default ID and PASSWORD";
-
 
 int ap_mode = 1;
 
@@ -121,10 +76,14 @@ void setup() {
    }
    else if ((EEPROM.read(MID_STATUS)==1)  && (EEPROM.read(MPW_STATUS)==1)) {  
 
-	if (EEPROM.read(LAST_STATE))
+	if (EEPROM.read(LAST_STATE)) {
    		digitalWrite(DEVICE1, HIGH); // turn on
-	else 
+		status = "ON";
+	}
+	else {
    		digitalWrite(DEVICE1, LOW); // turn on
+		status = "OFF";
+	}
 
    	mid     = eeprom_read_idpw(MID_START,MID_LENGTH);
    	mpw     = eeprom_read_idpw(MPW_START,MPW_LENGTH);
@@ -244,6 +203,51 @@ void leaf_mode_loop() {
   mesh.update();
 }
 
+
+//========================================================================================================================
+void sendMessage() {
+  String msg = String(status + " : ");
+  msg += mesh.getNodeId();
+  mesh.sendBroadcast( msg );
+  taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
+}
+
+// Needed for painless library
+void receivedCallback( uint32_t from, String &msg ) {
+  Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
+
+  if ( msg == "ON")
+  {
+	if(!EEPROM.read(LAST_STATE)) {
+		EEPROM.write(LAST_STATE,1);
+		EEPROM.commit();
+	}
+  	digitalWrite(DEVICE1,HIGH); //For ESP8266 1=0
+	status = "ON";
+  }
+  else if (msg == "OFF")
+  {
+	if(EEPROM.read(LAST_STATE)) {
+		EEPROM.write(LAST_STATE,0);
+		EEPROM.commit();
+	}
+  	digitalWrite(DEVICE1,LOW); //For ESP8266 1=0
+	status = "OFF";
+  }
+
+}
+
+void newConnectionCallback(uint32_t nodeId) {
+    Serial.printf("--> startHere: New Connection, nodeId = %u\n", nodeId);
+}
+
+void changedConnectionCallback() {
+    Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
+}
+
+void nodeTimeAdjustedCallback(int32_t offset) {
+    Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
+}
 //========================================================================================================================
 int erase_eeprom ()
 {
