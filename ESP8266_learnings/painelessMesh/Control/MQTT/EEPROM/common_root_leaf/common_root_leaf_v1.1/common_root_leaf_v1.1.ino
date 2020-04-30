@@ -1,13 +1,16 @@
 // Revision 1.0 : Sending message only when required / asked
 // Revision 1.1 : Update Credentials over MQTT
 // Revision 1.2 : Solving the restart issue
+// Revision 1.3 : Status and VER issue
+// Revision 1.4 : Adding re-connecting attempt for the mqtt client to solve wifi connection loss and reconnect issue
 
 #include<ESP8266WiFi.h>
 #include <EEPROM.h>
 
 #define ERASE_PIN 5 // D1
 
-#define VERSION "V1.2"
+#define VERSION "V1.4"
+#define MAX_RECON_ATTEMPT 18
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
 #include <Arduino.h>
@@ -266,19 +269,50 @@ static int rtrpwd_updated   = 0;
 void root_node_loop() {
   
   mesh.update();
-  mqttClient.loop();
+  mqttClient.loop(); 
+
+  static int mqtt_status = 1;
+  static int attempt_cnt = 0;
+  static unsigned long ini_time = millis();
 
   if(myIP != getlocalIP()){
-    myIP = getlocalIP();
-    Serial.println("My IP is " + myIP.toString());
-
-    if (mqttClient.connect("painlessMeshClient")) {
-      mqttClient.publish("painlessMesh/from/gateway","Ready!");
-      mqttClient.publish("painlessMesh/from/gateway",status.c_str());
-      mqttClient.subscribe("painlessMesh/to/#");
-    } 
+    	myIP = getlocalIP();
+    	Serial.println("My IP is " + myIP.toString());
+        mqtt_status = mqtt_reconnect();
+	attempt_cnt = 0;
   }
 
+  if(!mqtt_status) {
+  	if(millis()-ini_time > 5000) {
+        	mqtt_status = mqtt_reconnect();
+		attempt_cnt++;
+		if (attempt_cnt == MAX_RECON_ATTEMPT) {
+			Serial.println("Restarting as not able to connect to MQTT broker");
+			ESP.restart();
+		}
+  		ini_time = millis();
+	}
+  }
+
+
+
+}
+//========================================================================================================================
+int mqtt_reconnect(){
+
+    	Serial.println("Attempting to connect MQTT client...");
+    	if (mqttClient.connect("painlessMeshClient")) {
+    	  mqttClient.publish("painlessMesh/from/gateway","Ready!");
+    	  mqttClient.publish("painlessMesh/from/gateway",status.c_str());
+    	  mqttClient.subscribe("painlessMesh/to/#");
+	  return 1;
+    	} 
+    	else {
+    	    Serial.print("failed, rc=");
+    	    Serial.print(mqttClient.state());
+	    Serial.println("try again in 5 seconds");
+	    return 0;
+    	}
 }
 //========================================================================================================================
 void leaf_node_loop() { 
@@ -468,6 +502,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   free(cleanPayload);
 
   String targetStr = String(topic).substring(16);
+  String respStr;
 
 
   if(targetStr == "gateway")
@@ -476,9 +511,24 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      {
        mqttClient.publish("painlessMesh/from/gateway", mesh.subConnectionJson().c_str());
      }
-     else if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER")) {
-     	service_request(msg);
-        mqttClient.publish("painlessMesh/from/gateway", status.c_str());
+     else if(msg == "getList") {
+     
+    	std::list<uint32_t> nodelist = mesh.getNodeList();
+	String nodeId;
+    	for (std::list<uint32_t>::iterator it=nodelist.begin() ; it != nodelist.end();it++)
+    	{
+		nodeId = *it;
+       		mqttClient.publish("painlessMesh/from/gateway",nodeId.c_str());
+    	}
+	String no_of_nodes;
+	no_of_nodes = nodelist.size();
+	respStr = "No of nodes : " + no_of_nodes;
+       	mqttClient.publish("painlessMesh/from/gateway",respStr.c_str());
+     }
+
+     else if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK")) {
+     	service_request(msg, &respStr);
+        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
      }
      else if ( msg == "RESTART") {
      	Serial.println("Restart command from the app received ....");
@@ -487,7 +537,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      else if(msg.startsWith("update_mesh")) {
 	
 	// Take the new credentials
-	if (mqtt_update_idpw(msg, &new_mid, &new_mpw)) { 
+	if (mqtt_update_idpw(msg, &new_mid, &new_mpw, &respStr)) { 
 		Serial.printf("ID : %s \n",new_mid.c_str());
 		Serial.printf("PASS : %s \n",new_mpw.c_str());
 
@@ -501,37 +551,37 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 			
 			Serial.printf("Node Resposes : %u : %s \n",mitr->first,mitr->second.c_str());
 		}
-		status = "Updating mesh credentials";
+		respStr = "Updating mesh credentials";
 		resp_type = MID_CMD_STATUS;
 		mesh.sendBroadcast(msg);
 	}
-        mqttClient.publish("painlessMesh/from/gateway", status.c_str());
+        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
      }
      else if (msg.startsWith("update_ssid")) {
-	if(mqtt_update_idpw(msg, &new_ssid, &new_pass)) {
+	if(mqtt_update_idpw(msg, &new_ssid, &new_pass, &respStr)) {
 		Serial.printf("ID : %s \n",new_ssid.c_str());
 		Serial.printf("PASS : %s \n",new_pass.c_str());
-		status = "Updating rtr credentials";
+		respStr = "Updating rtr credentials";
 		eeprom_write(new_ssid,SSID_START,SSID_LENGTH,SSID_STATUS);
 		eeprom_write(new_pass,PASS_START,PASS_LENGTH,PASS_STATUS);
-        	mqttClient.publish("painlessMesh/from/gateway", status.c_str()); // This message required if we retart with ESP command here 
+        	//mqttClient.publish("painlessMesh/from/gateway", respStr.c_str()); // This message required if we retart with ESP command here 
 		// Restart from app
 	}
-        mqttClient.publish("painlessMesh/from/gateway", status.c_str());
+        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
      }
      else if ((resp_type == RST_CMD_STATUS) && (msg == "mesh_push")) {
      	//
 	mesh.sendBroadcast(msg);
-	status = "Leaf nodes will restart with new credentials";
-        mqttClient.publish("painlessMesh/from/gateway", status.c_str());
+	respStr = "Leaf nodes will restart with new credentials";
+        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
      }
      else if(msg == "mesh_cred") {
-     	status = "Mesh ID : ";
-	status += mid;
-        mqttClient.publish("painlessMesh/from/gateway", status.c_str());
-     	status = "Mesh PW : ";
-	status += mpw;
-        mqttClient.publish("painlessMesh/from/gateway", status.c_str());
+     	respStr = "Mesh ID : ";
+	respStr += mid;
+        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
+     	respStr = "Mesh PW : ";
+	respStr += mpw;
+        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
      }
 	
   }
@@ -539,8 +589,8 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   {
     mesh.sendBroadcast(msg);
      // Do the action for the root node also 
-     service_request(msg);
-     mqttClient.publish("painlessMesh/from/gateway", status.c_str());
+     service_request(msg, &respStr);
+     mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
 
   }
   else
@@ -562,8 +612,8 @@ IPAddress getlocalIP() {
   return IPAddress(mesh.getStationIP());
 }
 //========================================================================================================================
-void sendMessage() {
-  String msg = String(status + " : ");
+void sendMessage(String respStr) {
+  String msg = respStr + " : ";
   msg += mesh.getNodeId();
   mesh.sendBroadcast( msg );
   //taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
@@ -573,9 +623,11 @@ void sendMessage() {
 void lf_receivedCallback( uint32_t from, String &msg ) {
   Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
 
-  if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER")) {
-  	service_request(msg);
-	sendMessage();
+  String respStr;
+
+  if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK"))  {
+  	service_request(msg, &respStr);
+	sendMessage(respStr);
   }
   else if ( msg == "RESTART") {
      	Serial.println("Restart command from the app received ....");
@@ -584,17 +636,17 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
   else if(msg.startsWith("update_mesh")) {
 	
 	// Take the new credentials
-	if(mqtt_update_idpw(msg, &new_mid, &new_mpw)){
+	if(mqtt_update_idpw(msg, &new_mid, &new_mpw, &respStr)){
 		Serial.printf("ID : %s \n",new_mid.c_str());
 		Serial.printf("PASS : %s \n",new_mpw.c_str());
-		status = MID_CMD_STATUS;
+		respStr = MID_CMD_STATUS;
 	}
-	sendMessage();
+	sendMessage(respStr);
   }
   else if(msg == "mesh_push")
   {
-  	status = RST_CMD_STATUS;
-	sendMessage();
+  	respStr = RST_CMD_STATUS;
+	sendMessage(respStr);
 	// Write to EEPROM and restart
 	eeprom_write(new_mid,MID_START,MID_LENGTH,MID_STATUS);
 	eeprom_write(new_mpw,MPW_START,MPW_LENGTH,MPW_STATUS);
@@ -616,7 +668,7 @@ void nodeTimeAdjustedCallback(int32_t offset) {
 }
 
 
-void service_request(String req)
+void service_request(String req, String* respStr)
 {
 	if(req == "ON") {
 		if(!EEPROM.read(LAST_STATE)) {
@@ -624,7 +676,7 @@ void service_request(String req)
 			EEPROM.commit();
 		}
   		digitalWrite(DEVICE1,HIGH); 
-		status = "ON";
+		*respStr = "ON";
 	}
 	else if(req == "OFF") {
 		if(EEPROM.read(LAST_STATE)) {
@@ -632,15 +684,34 @@ void service_request(String req)
 			EEPROM.commit();
 		}
   		digitalWrite(DEVICE1,LOW); 
-		status = "OFF";
+		*respStr = "OFF";
 	}
+	else if(req == "STATUS")
+		if(EEPROM.read(LAST_STATE))
+			*respStr = "ON"; // V1.3
+		else
+			*respStr = "OFF";
 	else if(req == "VER")
-		status = VERSION;
+		*respStr = VERSION;
+	else if(req == "BLINK") {
+		unsigned long iniTime = millis();   
+		while(millis()-iniTime < 500)
+		{
+			if(millis()-iniTime < 250)
+				digitalWrite(LED_BUILTIN,LOW);
+			else
+				digitalWrite(LED_BUILTIN,HIGH);
+		} 
+		*respStr = ":)";
+
+	}
+	
+
 }
 
 //========================================================================================================================
 // If the ID and PW are of sufficient length return 1 [with update id pw ] or else 0 
-int mqtt_update_idpw(String new_idpw, String* id,String* pw)
+int mqtt_update_idpw(String new_idpw, String* id,String* pw, String* respStr)
 {
 	int first_space  = new_idpw.indexOf(' ');
 	int second_space = new_idpw.indexOf(' ',first_space+1);
@@ -648,13 +719,13 @@ int mqtt_update_idpw(String new_idpw, String* id,String* pw)
 	
 	// ID and PW to be of minimum lenght
 	if ((second_space - first_space) <= ID_LENGTH ) {
-		status  = "ID length < ";
-		status += ID_LENGTH;
+		*respStr  = "ID length < ";
+		*respStr += ID_LENGTH;
 		return 0;
 	}
 	if((last_index-second_space) <= PW_LENGTH) {
-		status  = "PW length < ";
-		status += PW_LENGTH;
+		*respStr  = "PW length < ";
+		*respStr += PW_LENGTH;
 		return 0;
 	}
 
@@ -665,6 +736,7 @@ int mqtt_update_idpw(String new_idpw, String* id,String* pw)
 //========================================================================================================================
 int update_nodeResponse(uint32_t nodeid, String resp ,String cmd_status )
 {
+	String respStr;
 	if(resp.startsWith(cmd_status)) {
 		std::map <uint32_t, String>::iterator mitr = nodeResponse.find(nodeid);
 		if(mitr != nodeResponse.end()) { 
@@ -679,16 +751,16 @@ int update_nodeResponse(uint32_t nodeid, String resp ,String cmd_status )
 		for(mitr = nodeResponse.begin(); mitr != nodeResponse.end();mitr++)
 		{
 			if(mitr->second != cmd_status) {
-				status = mitr->first;
-				status += " : Response awaited";
-  				mqttClient.publish("painlessMesh/from/gateway",status.c_str());
+				respStr = mitr->first;
+				respStr += " : Response awaited";
+  				mqttClient.publish("painlessMesh/from/gateway",respStr.c_str());
 				return 0;
 			}
 		}
 		
 		// Write to eeprom and restart 
-		status = cmd_status + " All nodes";
-  		mqttClient.publish("painlessMesh/from/gateway",status.c_str());
+		respStr = cmd_status + " All nodes";
+  		mqttClient.publish("painlessMesh/from/gateway",respStr.c_str());
 		return 1;
 	}
 	else 
@@ -696,3 +768,23 @@ int update_nodeResponse(uint32_t nodeid, String resp ,String cmd_status )
 }
 //========================================================================================================================
 
+
+/* OBS :
+
+SSID . PW changed to mobile hot-spot 
+1. Disabling hospot and enabling again 
+
+- Not connecting to the hotspot again 
+
+Dislays this message continuously
+- CONNECTION: Event: Station Mode Disconnected
+- CONNECTION: eraseClosedConnections():
+
+But this case was after frequent connection and disconnection. 
+
+later on I was able to re-connect [ after reset ]
+
+
+NU_JIO re-connection did not work ?
+
+*/
