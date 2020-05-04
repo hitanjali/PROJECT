@@ -3,13 +3,14 @@
 // Revision 1.2 : Solving the restart issue
 // Revision 1.3 : Status and VER issue
 // Revision 1.4 : Adding re-connecting attempt for the mqtt client to solve wifi connection loss and reconnect issue
+// Revision 1.5 : Leaf node hang : Not able to re-c0nnect to mesh
 
 #include<ESP8266WiFi.h>
 #include <EEPROM.h>
 
 #define ERASE_PIN 5 // D1
 
-#define VERSION "V1.4"
+#define VERSION "V1.5"
 #define MAX_RECON_ATTEMPT 18
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
@@ -32,6 +33,7 @@
 // Prototypes
 void rt_receivedCallback( const uint32_t &from, const String &msg );
 void mqttCallback(char* topic, byte* payload, unsigned int length);
+void pingCb(); //V1.5
 
 // User stub
 void sendMessage() ; // Prototype so PlatformIO doesn't complain
@@ -45,8 +47,9 @@ painlessMesh  mesh;
 WiFiClient wifiClient;
 PubSubClient mqttClient("broker.hivemq.com", 1883, mqttCallback, wifiClient);
 
-//Scheduler userScheduler; // to control your personal task
+Scheduler userScheduler; // to control your personal task
 //Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
+Task pingNodes(TASK_SECOND*5,MAX_RECON_ATTEMPT,&pingCb); //V1.5
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
 
@@ -294,11 +297,9 @@ void root_node_loop() {
 	}
   }
 
-
-
 }
 //========================================================================================================================
-int mqtt_reconnect(){
+int mqtt_reconnect(){ // V1.4
 
     	Serial.println("Attempting to connect MQTT client...");
     	if (mqttClient.connect("painlessMeshClient")) {
@@ -308,15 +309,15 @@ int mqtt_reconnect(){
 	  return 1;
     	} 
     	else {
-    	    Serial.print("failed, rc=");
+    	    Serial.print("failed, rc= ");
     	    Serial.print(mqttClient.state());
-	    Serial.println("try again in 5 seconds");
+	    Serial.println(" Try again in 5 seconds");
 	    return 0;
     	}
 }
 //========================================================================================================================
 void leaf_node_loop() { 
-//  userScheduler.execute(); // it will run mesh scheduler as well
+  userScheduler.execute(); // it will run mesh scheduler as well
   mesh.update();
 }
 
@@ -422,6 +423,8 @@ void leaf_node_setup() {
   mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
 
 //  userScheduler.addTask( taskSendMessage );
+  userScheduler.addTask( pingNodes );
+
 //  taskSendMessage.enable();
   // This and all other mesh should ideally now the mesh contains a root
   mesh.setContainsRoot(true);
@@ -661,6 +664,14 @@ void newConnectionCallback(uint32_t nodeId) {
 void changedConnectionCallback() {
     Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
 
+    if(!root_node) { // For leaf node             V1.5 : If the leaf node is not able to connect to any other mesh node
+    	std::list<uint32_t> nodelist = mesh.getNodeList();
+	if(nodelist.empty())
+		pingNodes.enable();
+	else
+		pingNodes.disable();
+    }
+
 }
 
 void nodeTimeAdjustedCallback(int32_t offset) {
@@ -765,6 +776,25 @@ int update_nodeResponse(uint32_t nodeid, String resp ,String cmd_status )
 	}
 	else 
 		return 0;
+}
+
+//========================================================================================================================
+void pingCb() {  //V1.5
+	
+	if(pingNodes.isFirstIteration()) 
+		Serial.print("Attempt count");
+	else if(pingNodes.isLastIteration()) {
+		Serial.println("Failed to connect to any other nodes in the mesh ...");
+		Serial.print("Restarting the node ....");
+		ESP.restart();
+	}
+	else 
+		Serial.print(".");
+
+	
+	
+	
+
 }
 //========================================================================================================================
 

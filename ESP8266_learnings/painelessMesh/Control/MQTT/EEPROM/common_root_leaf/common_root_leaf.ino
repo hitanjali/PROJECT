@@ -461,6 +461,9 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      	   digitalWrite(DEVICE1,LOW);
            mqttClient.publish("painlessMesh/from/gateway", "OFF");
      }
+     else if ( msg == "RESTART") {
+     	
+     }
 	
   }
   else if(targetStr == "broadcast") 
