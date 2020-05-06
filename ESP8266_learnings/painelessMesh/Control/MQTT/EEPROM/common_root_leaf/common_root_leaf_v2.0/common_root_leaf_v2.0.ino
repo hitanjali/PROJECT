@@ -4,7 +4,9 @@
 // Revision 1.3 : Status and VER issue
 // Revision 1.4 : Adding re-connecting attempt for the mqtt client to solve wifi connection loss and reconnect issue
 // Revision 1.5 : Leaf node hang : Not able to re-c0nnect to mesh
-// Revision 2.0 : 
+// Revision 2.0 : Broken TCP link re-connect issue
+// Revision 2.1 : Leafs to send message only to the sender [ root/gateway as of now ]
+// Revision 2.2 : mqtt tasks enabling disabling changed
 /*
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
@@ -15,7 +17,7 @@ Seems like the HiveMQ is disconnecting and hence we are not able to send the com
 #define ERASE_PIN 5 // D1
 #define analogInPin A0
 
-#define VERSION "V2.0"
+#define VERSION "V2.2"
 #define MAX_RECON_ATTEMPT 18
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
@@ -42,7 +44,7 @@ void mqttstateCb();
 void mqttReconnectCb();
 
 // User stub
-void sendMessage() ; // Prototype so PlatformIO doesn't complain
+void sendMessage(uint32_t from,String respStr) ; // Prototype so PlatformIO doesn't complain
 
 IPAddress getlocalIP();
 
@@ -54,7 +56,7 @@ WiFiClient wifiClient;
 PubSubClient mqttClient("broker.hivemq.com", 1883, mqttCallback, wifiClient);
 
 Scheduler userScheduler; // to control your personal task
-Task mqttstate (TASK_SECOND*90, TASK_ONCE , &mqttstateCb);
+Task mqttstate (TASK_SECOND*90, TASK_FOREVER , &mqttstateCb);
 Task mqttReconnect (TASK_SECOND*5, MAX_RECON_ATTEMPT , &mqttReconnectCb);
 //Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
@@ -285,9 +287,11 @@ void root_node_loop() {
   userScheduler.execute();
   mesh.update();
 
-  if(!mqttClient.loop() && checkmqttstatus) {
+  if(!mqttClient.loop() && checkmqttstatus) 
   	mqttstate.enableIfNot();
-  }
+  else 
+  	mqttstate.disable();
+
 
   if(myIP != getlocalIP()){
     	myIP = getlocalIP();
@@ -316,6 +320,7 @@ void mqttReconnectCb(){ // V1.4
     	  mqttClient.publish("painlessMesh/from/gateway","Ready!");
     	  mqttClient.publish("painlessMesh/from/gateway",status.c_str());
     	  mqttClient.subscribe("painlessMesh/to/#");
+	  mqttReconnect.restart();
 	  mqttReconnect.disable();
     	} 
     	else {
@@ -531,12 +536,13 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 	String nodeId;
     	for (std::list<uint32_t>::iterator it=nodelist.begin() ; it != nodelist.end();it++)
     	{
-		nodeId = *it;
-       		mqttClient.publish("painlessMesh/from/gateway",nodeId.c_str());
+		nodeId += String(*it) + String(" ");
     	}
 	String no_of_nodes;
 	no_of_nodes = nodelist.size();
-	respStr = "No of nodes : " + no_of_nodes;
+	respStr = nodeId + "# : " + no_of_nodes;
+	Serial.printf("Sending getList response %s\n",respStr.c_str());
+
        	mqttClient.publish("painlessMesh/from/gateway",respStr.c_str());
      }
 
@@ -628,22 +634,27 @@ IPAddress getlocalIP() {
   return IPAddress(mesh.getStationIP());
 }
 //========================================================================================================================
-void sendMessage(String respStr) {
-  String msg = respStr + " : ";
-  msg += mesh.getNodeId();
-  mesh.sendBroadcast( msg );
+void sendMessage(uint32_t from,String respStr) {
+  
+  mesh.sendSingle(from,respStr);
+  //String msg = respStr + " : ";
+  //msg += mesh.getNodeId();
+  //mesh.sendBroadcast( msg );
+
+  // Just send it to the bridge and not all the nodes 
   //taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
 }
 
 // Needed for painless library
 void lf_receivedCallback( uint32_t from, String &msg ) {
+
   Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
 
   String respStr;
 
   if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK"))  {
   	service_request(msg, &respStr);
-	sendMessage(respStr);
+	sendMessage(from,respStr);
   }
   else if ( msg == "RESTART") {
      	Serial.println("Restart command from the app received ....");
@@ -657,12 +668,12 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
 		Serial.printf("PASS : %s \n",new_mpw.c_str());
 		respStr = MID_CMD_STATUS;
 	}
-	sendMessage(respStr);
+	sendMessage(from,respStr);
   }
   else if(msg == "mesh_push")
   {
   	respStr = RST_CMD_STATUS;
-	sendMessage(respStr);
+	sendMessage(from,respStr);
 	// Write to EEPROM and restart
 	eeprom_write(new_mid,MID_START,MID_LENGTH,MID_STATUS);
 	eeprom_write(new_mpw,MPW_START,MPW_LENGTH,MPW_STATUS);
