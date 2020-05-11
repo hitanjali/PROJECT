@@ -7,6 +7,9 @@
 // Revision 2.0 : Broken TCP link re-connect issue
 // Revision 2.1 : Leafs to send message only to the sender [ root/gateway as of now ]
 // Revision 2.2 : mqtt tasks enabling disabling changed
+// Revision 2.3 : Will Message for connected
+// Revision 2.4 : ClineID setting during the initial phase
+// Revision 2.5 : ClineID length requirements and also in not Bhagvadgita
 /*
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
@@ -17,8 +20,9 @@ Seems like the HiveMQ is disconnecting and hence we are not able to send the com
 #define ERASE_PIN 5 // D1
 #define analogInPin A0
 
-#define VERSION "V2.2"
+#define VERSION "V2.4"
 #define MAX_RECON_ATTEMPT 18
+#define CLIENT_ID_MIN_LENGTH 18
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
 #include <Arduino.h>
@@ -42,6 +46,8 @@ void rt_receivedCallback( const uint32_t &from, const String &msg );
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void mqttstateCb();
 void mqttReconnectCb();
+void pingCb(); //V1.5
+
 
 // User stub
 void sendMessage(uint32_t from,String respStr) ; // Prototype so PlatformIO doesn't complain
@@ -58,6 +64,9 @@ PubSubClient mqttClient("broker.hivemq.com", 1883, mqttCallback, wifiClient);
 Scheduler userScheduler; // to control your personal task
 Task mqttstate (TASK_SECOND*90, TASK_FOREVER , &mqttstateCb);
 Task mqttReconnect (TASK_SECOND*5, MAX_RECON_ATTEMPT , &mqttReconnectCb);
+Task pingNodes(TASK_SECOND*5,MAX_RECON_ATTEMPT,&pingCb); //V1.5
+
+
 //Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
@@ -82,8 +91,11 @@ const int MPW_LENGTH  = 112;
 const int MPW_STATUS  = 113;
 const int LAST_STATE  = 114;
 const int NODE_TYPE   = 115;
+const int CID_START   = 128;
+const int CID_LENGTH  = 192;
+const int CID_STATUS  = 193;
 
-const int EEPROM_END = 128;
+const int EEPROM_END = 256;
 
 const int DEVICE1     = 4; // D2
 const int PW_LENGTH = 8;
@@ -100,7 +112,12 @@ String mid         = MESH_PREFIX;
 String mpw         = MESH_PASSWORD;
 int    mesh_port   = MESH_PORT;
 String value       = "Default ID and PASSWORD";
-String clientId    = "tasmat-yogi-bhavarjuna-";
+String clientId    = "PENDING"; 
+String topicBegin;
+String willTopic     = "/painlessMesh/from/will";
+String gatewayTopic  = "/painlessMesh/from/gateway";
+String hashTopic     = "/painlessMesh/to/#";
+String nodeTopic     = "/painlessMesh/from/";
 
 String new_mid,new_mpw,new_ssid,new_pass;
 
@@ -150,6 +167,8 @@ void setup() {
 	if ( root_node ) {
    		rtrssid = eeprom_read_idpw(SSID_START,SSID_LENGTH);
    		rtrpwd  = eeprom_read_idpw(PASS_START,PASS_LENGTH);
+		clientId = eeprom_read_idpw(CID_START,CID_LENGTH);
+		extractTopicBegin(); 
 		root_node_setup();
 	}
 	else
@@ -201,22 +220,35 @@ static int rtrpwd_updated   = 0;
   
   if(node_type == "PENDING") {
   	if(request.indexOf("/node/") !=-1) {
-      		node_type = update_id_pw(request);
-		value = node_type;
+      		update_id_pw(request, &node_type);
 		if( node_type == "root")
 			root_node = 1;
 	}
 	else 
 		value = "Update node type [root/leaf] first";
   }
+  else if(root_node && clientId == "PENDING") { 
+  	if(request.indexOf("/clientid/") !=-1) {
+      		update_id_pw(request, &clientId);
+		if(clientId.length() < CLIENT_ID_MIN_LENGTH) {
+			clientId = "PENDING";
+			value = "clientId length < CLIENT_ID_MIN_LENGTH characters. Not accepted";
+		}
+	}
+	else 
+		value = "Update clientid first";
+  
+  
+  }
+
   // Match request
   else if(request.indexOf("/mid/") != -1) {
-      mid = update_id_pw(request);
+      update_id_pw(request, &mid);
       mid_updated = 1;
 
   } 
   else if(request.indexOf("/mpw/") != -1) {
-      mpw = update_id_pw(request);
+      update_id_pw(request, &mpw);
       mpw_updated = 1;
   }
   else if(request.indexOf("/confirmed")!=-1) {
@@ -229,6 +261,7 @@ static int rtrpwd_updated   = 0;
 		eeprom_write(mid,MID_START,MID_LENGTH,MID_STATUS);
 		eeprom_write(mpw,MPW_START,MPW_LENGTH,MPW_STATUS);
 		if(root_node) {
+			eeprom_write(clientId,CID_START,CID_LENGTH,CID_STATUS);
 			eeprom_write(rtrssid,SSID_START,SSID_LENGTH,SSID_STATUS);
 			eeprom_write(rtrpwd,PASS_START,PASS_LENGTH,PASS_STATUS);
 		}
@@ -250,11 +283,11 @@ static int rtrpwd_updated   = 0;
   }
   else if( root_node ) {
   	if(request.indexOf("/rtrssid/") != -1)  {
-      		rtrssid = update_id_pw(request);
+      		update_id_pw(request, &rtrssid);
 		rtrssid_updated = 1;
   	}
   	else if(request.indexOf("/rtrpwd/") != -1)  {
-      		rtrpwd = update_id_pw(request);
+      		update_id_pw(request, &rtrpwd);
 		rtrpwd_updated = 1;
   	}
   }
@@ -316,15 +349,16 @@ void mqttReconnectCb(){ // V1.4
 		Serial.println("Restarting as not able to connect to MQTT broker");
 		ESP.restart();
 	}
-    	else if (mqttClient.connect(clientId.c_str(),"painlessMesh/from/will",2,1, (clientId + " disconnected badly").c_str())) { 
-    	  mqttClient.publish("painlessMesh/from/gateway","Ready!");
-    	  mqttClient.publish("painlessMesh/from/gateway",status.c_str());
-    	  mqttClient.subscribe("painlessMesh/to/#");
+    	else if (mqttClient.connect(clientId.c_str(), willTopic.c_str(),2,1, "DISC")) { 
+    	// else if (mqttClient.connect(clientId.c_str(),"KrishnamVande","J@9@tGurum", willTopic.c_str(),2,1, "DISC")) { 
+    	  mqttClient.publish(gatewayTopic.c_str(),"Ready!");
+    	  mqttClient.publish(willTopic.c_str(),"CONN",true);
+    	  mqttClient.subscribe(hashTopic.c_str());
 	  mqttReconnect.restart();
 	  mqttReconnect.disable();
     	} 
     	else {
-    	    Serial.print("failed, rc= ");
+    	    Serial.print("failed , rc= ");
     	    Serial.print(mqttClient.state());
 	    Serial.println(" Try again in 5 seconds");
     	}
@@ -408,8 +442,6 @@ void root_node_setup()
 {
    Serial.println("Entering root node setup");
 
-   newClinetId(&clientId);
-
    mesh.setDebugMsgTypes( ERROR | STARTUP | CONNECTION );  // set before init() so that you can see startup messages
 
   // Channel set to 6. Make sure to use the same channel for your mesh and for you other
@@ -441,6 +473,8 @@ void leaf_node_setup() {
   mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
 
 //  userScheduler.addTask( taskSendMessage );
+  userScheduler.addTask( pingNodes );
+
 //  taskSendMessage.enable();
   // This and all other mesh should ideally now the mesh contains a root
   mesh.setContainsRoot(true);
@@ -450,19 +484,18 @@ void leaf_node_setup() {
 
 //========================================================================================================================
 
-String update_id_pw(String req)
+void update_id_pw(String req,String* changeObject)
 {
      	digitalWrite(LED_BUILTIN, HIGH);
      	int first_slash = req.indexOf('/');
      	int second_slash = req.indexOf('/', first_slash+1);
-     	int end_index = req.indexOf(' ',second_slash+1);
-     	String mesh_idpw = req.substring(second_slash+1,end_index);
-     	value = mesh_idpw;
+	int end_index = req.indexOf(' ',second_slash+1);    // string ends with " HTTP/1.1" Hence the last index is " "
+     	*changeObject = req.substring(second_slash+1,end_index);
+     	value = *changeObject;
      	Serial.print("MESH credintial received is : ");
-     	Serial.println(mesh_idpw);
+     	Serial.println(*changeObject);
      	delay(1000);
      	digitalWrite(LED_BUILTIN, LOW);
-	return mesh_idpw;
 
 }
 //========================================================================================================================
@@ -491,7 +524,7 @@ void eeprom_write(String idpw,int start_addr,int length_addr,int status_addr)
 void rt_receivedCallback( const uint32_t &from, const String &msg ) {
 
   Serial.printf("bridge: Received from %u msg=%s\n", from, msg.c_str());
-  String topic = "painlessMesh/from/" + String(from);
+  String topic = nodeTopic + String(from);
   mqttClient.publish(topic.c_str(), msg.c_str());
 
 
@@ -520,7 +553,8 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   String msg = String(cleanPayload);
   free(cleanPayload);
 
-  String targetStr = String(topic).substring(16);
+  static int topicBeginLength = topicBegin.length();
+  String targetStr = String(topic).substring(topicBeginLength + 1 + 16 ); // TopicBegin length + / [1] + painlessMesh/to/ [15] + 1 for starting next
   String respStr;
 
 
@@ -528,7 +562,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   {
      if(msg == "getNodes")
      {
-       mqttClient.publish("painlessMesh/from/gateway", mesh.subConnectionJson().c_str());
+       mqttClient.publish(gatewayTopic.c_str(), mesh.subConnectionJson().c_str());
      }
      else if(msg == "getList") {
      
@@ -543,12 +577,12 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 	respStr = nodeId + "# : " + no_of_nodes;
 	Serial.printf("Sending getList response %s\n",respStr.c_str());
 
-       	mqttClient.publish("painlessMesh/from/gateway",respStr.c_str());
+       	mqttClient.publish(gatewayTopic.c_str(),respStr.c_str());
      }
 
      else if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK")) {
      	service_request(msg, &respStr);
-        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
+        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
      }
      else if ( msg == "RESTART") {
      	Serial.println("Restart command from the app received ....");
@@ -575,7 +609,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 		resp_type = MID_CMD_STATUS;
 		mesh.sendBroadcast(msg);
 	}
-        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
+        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
      }
      else if (msg.startsWith("update_ssid")) {
 	if(mqtt_update_idpw(msg, &new_ssid, &new_pass, &respStr)) {
@@ -584,24 +618,24 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 		respStr = "Updating rtr credentials";
 		eeprom_write(new_ssid,SSID_START,SSID_LENGTH,SSID_STATUS);
 		eeprom_write(new_pass,PASS_START,PASS_LENGTH,PASS_STATUS);
-        	//mqttClient.publish("painlessMesh/from/gateway", respStr.c_str()); // This message required if we retart with ESP command here 
+        	//mqttClient.publish(gatewayTopic.c_str(), respStr.c_str()); // This message required if we retart with ESP command here 
 		// Restart from app
 	}
-        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
+        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
      }
      else if ((resp_type == RST_CMD_STATUS) && (msg == "mesh_push")) {
      	//
 	mesh.sendBroadcast(msg);
 	respStr = "Leaf nodes will restart with new credentials";
-        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
+        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
      }
      else if(msg == "mesh_cred") {
      	respStr = "Mesh ID : ";
 	respStr += mid;
-        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
+        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
      	respStr = "Mesh PW : ";
 	respStr += mpw;
-        mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
+        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
      }
 	
   }
@@ -612,7 +646,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
     mesh.sendBroadcast(msg);
      // Do the action for the root node also 
      service_request(msg, &respStr);
-     mqttClient.publish("painlessMesh/from/gateway", respStr.c_str());
+     mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
 
   }
   else
@@ -624,7 +658,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
     }
     else
     {
-      mqttClient.publish("painlessMesh/from/gateway", "Client not connected!");
+      mqttClient.publish(gatewayTopic.c_str(), "NOCON");
     }
   }
 }
@@ -637,11 +671,6 @@ IPAddress getlocalIP() {
 void sendMessage(uint32_t from,String respStr) {
   
   mesh.sendSingle(from,respStr);
-  //String msg = respStr + " : ";
-  //msg += mesh.getNodeId();
-  //mesh.sendBroadcast( msg );
-
-  // Just send it to the bridge and not all the nodes 
   //taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
 }
 
@@ -687,6 +716,17 @@ void newConnectionCallback(uint32_t nodeId) {
 
 void changedConnectionCallback() {
     Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
+    
+    if(!root_node) { // For leaf node             V1.5 : If the leaf node is not able to connect to any other mesh node
+    	std::list<uint32_t> nodelist = mesh.getNodeList();
+	if(nodelist.empty())
+		pingNodes.enableIfNot();
+	else {
+		pingNodes.restart();
+		pingNodes.disable();
+	}
+    }
+    
 }
 
 void nodeTimeAdjustedCallback(int32_t offset) {
@@ -779,29 +819,60 @@ int update_nodeResponse(uint32_t nodeid, String resp ,String cmd_status )
 			if(mitr->second != cmd_status) {
 				respStr = mitr->first;
 				respStr += " : Response awaited";
-  				mqttClient.publish("painlessMesh/from/gateway",respStr.c_str());
+  				mqttClient.publish(gatewayTopic.c_str(),respStr.c_str());
 				return 0;
 			}
 		}
 		
 		// Write to eeprom and restart 
 		respStr = cmd_status + " All nodes";
-  		mqttClient.publish("painlessMesh/from/gateway",respStr.c_str());
+  		mqttClient.publish(gatewayTopic.c_str(),respStr.c_str());
 		return 1;
 	}
 	else 
 		return 0;
 }
 
-void newClinetId(String* clientId) {
-	srand(analogRead(analogInPin));
-	*clientId += rand();
-}
-
 //========================================================================================================================
 void mqttstateCb()  {
   	Serial.printf("MQTT connection state : %d \n",mqttClient.state()); 
 	mqttReconnect.enableIfNot();
+}
+//========================================================================================================================
+void pingCb() {  //V1.5
+	
+	if(pingNodes.isFirstIteration()) 
+		Serial.print("Waiting to connect with other nodes");
+	else if(pingNodes.isLastIteration()) {
+		Serial.println("Failed to connect to any other nodes in the mesh ...");
+		Serial.print("Restarting the node ....");
+		ESP.restart();
+	}
+	else 
+		Serial.print(".");
+}
+//========================================================================================================================
+void extractTopicBegin() {
+
+	int start_index = clientId.lastIndexOf("Shrimad");
+	if(start_index !=-1) 
+		topicBegin = clientId.substring(start_index);
+	else {
+		int last_index = clientId.length();
+		topicBegin = clientId.substring(last_index-CLIENT_ID_MIN_LENGTH); // Last 18 characters taken
+	}
+		
+	Serial.printf("All the topics will begin with : %s \n", topicBegin.c_str()); 
+
+	willTopic    = topicBegin + willTopic;
+	Serial.printf("Will Topic : %s \n", willTopic.c_str());
+	gatewayTopic = topicBegin + gatewayTopic;
+	Serial.printf("Gateway Topic : %s \n", gatewayTopic.c_str());
+	hashTopic    = topicBegin + hashTopic;
+	Serial.printf("hash Topic : %s \n", hashTopic.c_str());
+	nodeTopic    = topicBegin + nodeTopic;
+	Serial.printf("Nodes Topic : %s \n", nodeTopic.c_str());
+
 }
 //========================================================================================================================
 
