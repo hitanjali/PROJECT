@@ -10,6 +10,7 @@
 // Revision 2.3 : Will Message for connected
 // Revision 2.4 : ClineID setting during the initial phase
 // Revision 2.5 : ClineID length requirements and also in not Bhagvadgita
+// Revision 2.6 : Root node re-connection in the mesh has issue [ Ref gitlab ]
 /*
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
@@ -20,7 +21,7 @@ Seems like the HiveMQ is disconnecting and hence we are not able to send the com
 #define ERASE_PIN 5 // D1
 #define analogInPin A0
 
-#define VERSION "V2.4"
+#define VERSION "V2.6"
 #define MAX_RECON_ATTEMPT 18
 #define CLIENT_ID_MIN_LENGTH 18
 
@@ -64,7 +65,7 @@ PubSubClient mqttClient("broker.hivemq.com", 1883, mqttCallback, wifiClient);
 Scheduler userScheduler; // to control your personal task
 Task mqttstate (TASK_SECOND*90, TASK_FOREVER , &mqttstateCb);
 Task mqttReconnect (TASK_SECOND*5, MAX_RECON_ATTEMPT , &mqttReconnectCb);
-Task pingNodes(TASK_SECOND*5,MAX_RECON_ATTEMPT,&pingCb); //V1.5
+Task pingNodes(TASK_SECOND*5, MAX_RECON_ATTEMPT, &pingCb); //V1.5
 
 
 //Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
@@ -365,7 +366,10 @@ void mqttReconnectCb(){ // V1.4
 }
 //========================================================================================================================
 void leaf_node_loop() { 
+
+  userScheduler.execute();
   mesh.update();
+
 }
 
 //========================================================================================================================
@@ -715,11 +719,11 @@ void newConnectionCallback(uint32_t nodeId) {
 }
 
 void changedConnectionCallback() {
-    Serial.printf("Changed connections %s\n",mesh.subConnectionJson().c_str());
+    String networkTopo = mesh.subConnectionJson();
+    Serial.printf("Changed connections %s\n",networkTopo.c_str());
     
     if(!root_node) { // For leaf node             V1.5 : If the leaf node is not able to connect to any other mesh node
-    	std::list<uint32_t> nodelist = mesh.getNodeList();
-	if(nodelist.empty())
+	if(networkTopo.indexOf("\"root\":true") == -1) // V2.6 will also solve V1.5 as that too will not have root
 		pingNodes.enableIfNot();
 	else {
 		pingNodes.restart();
@@ -771,6 +775,11 @@ void service_request(String req, String* respStr)
 		*respStr = ":)";
 
 	}
+	else if(req == "ANALOG_STATUS") {
+	//	sendAnalogStatus(analogInPin);
+	}
+		
+
 	
 
 }
@@ -875,24 +884,8 @@ void extractTopicBegin() {
 
 }
 //========================================================================================================================
-
-
-/* OBS :
-
-SSID . PW changed to mobile hot-spot 
-1. Disabling hospot and enabling again 
-
-- Not connecting to the hotspot again 
-
-Dislays this message continuously
-- CONNECTION: Event: Station Mode Disconnected
-- CONNECTION: eraseClosedConnections():
-
-But this case was after frequent connection and disconnection. 
-
-later on I was able to re-connect [ after reset ]
-
-
-NU_JIO re-connection did not work ?
-
-*/
+//void sendAnalogStatus(String* anaResp) {
+//	int anaValue = analogRead(analpgPin);
+//        // Based on the sensor type the conversion will change 
+//}
+//========================================================================================================================
