@@ -17,13 +17,17 @@
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
 
-#include<ESP8266WiFi.h>
+// Task defines
+#define _TASK_MICRO_RES
+
+#include <ESP8266WiFi.h>
 #include <EEPROM.h>
+#include <SoftwareSerial.h>
 
 #define ERASE_PIN 5 // D1
 #define analogInPin A0
 
-#define VERSION "V2.6"
+#define VERSION "V3.0"
 #define MAX_RECON_ATTEMPT 18
 #define CLIENT_ID_MIN_LENGTH 18
 
@@ -33,16 +37,23 @@ Seems like the HiveMQ is disconnecting and hence we are not able to send the com
 #include <PubSubClient.h>
 #include <WiFiClient.h>
 
-#define   MESH_PREFIX     "matrix"
-#define   MESH_PASSWORD   "therisnospoon"
-#define   MESH_PORT       5555
+#define MESH_PREFIX     "matrix"
+#define MESH_PASSWORD   "therisnospoon"
+#define MESH_PORT       5555
 
-#define   STATION_SSID     "dada100"
-#define   STATION_PASSWORD "dada2020"
+#define STATION_SSID     "dada100"
+#define STATION_PASSWORD "dada2020"
 
-#define   MID_CMD_STATUS     "MID_RCVD"
-#define   RST_CMD_STATUS     "RST_RCVD"
+#define MID_CMD_STATUS     "MID_RCVD"
+#define RST_CMD_STATUS     "RST_RCVD"
 #define HOSTNAME "MQTT_Bridge"
+
+#define rxPin 12 //D6
+#define txPin 14 //D5
+
+// set up a new serial port
+SoftwareSerial mySerial(rxPin, txPin);
+
 
 // Prototypes
 void rt_receivedCallback( const uint32_t &from, const String &msg );
@@ -50,7 +61,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length);
 void mqttstateCb();
 void mqttReconnectCb();
 void pingCb(); //V1.5
-
+void ICACHE_RAM_ATTR zeroCrossISR();
 
 // User stub
 void sendMessage(uint32_t from,String respStr) ; // Prototype so PlatformIO doesn't complain
@@ -102,9 +113,10 @@ const int DIMMER_EN   = 194;
 
 const int EEPROM_END = 256;
 
+//const int DIMMER      = 12;  // D6
+//const int ZCINT       = 14; // D5
+
 const int DEVICE1     = 4;  // D2
-const int DIMMER      = 0;  // D3
-const int ZCINT       = 12; // D5
 const int PW_LENGTH = 8;
 const int ID_LENGTH = 4;
 
@@ -133,7 +145,6 @@ int root_node = 0;
 byte isDimmer = 0;
 byte zcFlag   = 0;
 
-int dimVal = 0;
 
 std::map <uint32_t, String> nodeResponse;
 
@@ -607,6 +618,17 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      	service_request(msg, &respStr);
         mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
      }
+     else if(msg.startsWith("BRI")) {                            // V3.0
+  	if(isDimmer) {
+  		service_request(msg, &respStr);
+	}
+	else {
+		Serial.println("Dimmer not enabled");
+		respStr = "BRI0";
+	}
+	mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
+     }
+
      else if ( msg == "RESTART") {
      	Serial.println("Restart command from the app received ....");
 	ESP.restart();
@@ -694,7 +716,6 @@ IPAddress getlocalIP() {
 void sendMessage(uint32_t from,String respStr) {
   
   mesh.sendSingle(from,respStr);
-  //taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
 }
 
 // Needed for painless library
@@ -712,14 +733,14 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
      	Serial.println("Restart command from the app received ....");
 	ESP.restart();
   }
-  else if(msg.startsWith("DIM"))
+  else if(msg.startsWith("BRI"))
   {
   	if(isDimmer) {
   		service_request(msg, &respStr);
 	}
 	else {
 		Serial.println("Dimmer not enabled");
-		respStr = "DIM0";
+		respStr = "BRI0";
 	}
 	sendMessage(from,respStr);
 
@@ -806,21 +827,12 @@ void service_request(String req, String* respStr)
 		*respStr = ":)";
 
 	}
-	else if(req.startsWith("DIM")) {
-		dimVal = substring(3).toInt(); // Index of the first letter after D[0]I[1]M[2]
+	else if(req.startsWith("BRI")) {
+		int dimVal = req.substring(3).toInt(); // Index of the first letter after D[0]I[1]M[2]
 		Serial.printf("Dimmer value : %d \n",dimVal);
-		// Enable Interrupt
-		if(dimVal) {
-			attachInterrupt(digitalPinToInterrupt(ZCINT), zeroCrossISR, FALLING);
-		}
-		else {
-		// Disable interrupt
-			detachInterrupt(digitalPinToInterrupt(ZCINT));
-		// Switch off the device
-
-		}
-
-		respStr = msg;
+		dimVal = 100-dimVal;   // The wheel on the app is indicating brightness 
+		mySerial.print(dimVal); // Send dim value to Arduino
+		*respStr = req;
 	}
 	else if(req == "ANSTAT") {
 	//	sendAnalogStatus(analogInPin);
@@ -936,28 +948,21 @@ void extractTopicBegin() {
 //        // Based on the sensor type the conversion will change 
 //}
 //========================================================================================================================
-void ioSetup ()
-{
+void ioSetup () {
+
    pinMode(DEVICE1, OUTPUT);
    digitalWrite(DEVICE1, LOW); // V2..7 for inital flickering  OFF at start
 
-   pinMode(DIMMER, OUTPUT);
-   digitalWrite(DIMMER, HIGH); // V3.0 for dimmer
-
-   pinMode(ZCINT, INPUT);
+   pinMode(rxPin, INPUT);
+   pinMode(txPin, OUTPUT);
+   // set the data rate for the SoftwareSerial port
+   mySerial.begin(9600);
 
    pinMode(ERASE_PIN,INPUT);
 
    pinMode(LED_BUILTIN, OUTPUT);
    digitalWrite(LED_BUILTIN, HIGH); // turn off
 
-// Dimmer should be configurable and by defaut will be not there so that those pins will be used as normal IOs
+// Software serial should be configrable only in case of dimmer is true
 }
-//========================================================================================================================
-void zeroCrossISR() {
-	// Enable the task scheduling 
-}
-//========================================================================================================================
-void dimmerControl () {
 
-}
