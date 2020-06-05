@@ -1,0 +1,37 @@
+ESP8266 3.3V 
+
+Flickers always 
+
+
+Arduino Nano - 3.3V 
+
+Flickering with low light , bright light is good 
+
+
+Arduino with 5V -
+
+Dimming working good
+
+
+ESP8266 communicating with Arduino over 2 lines [ One as INC/DEC line and Other as no of interrupts = diff from the last value to the new value ]
+
+
+Works excellent. 
+
+Observation : 
+================================================================================
+_TASK_MICRO_RES not working 
+
+even if we say TASK_MILLISECOND it was taking as seconds only, 
+
+I put the literal value of 5 then it takes as milli sedconds in the ESP code. 
+================================================================================
+For arduino aslo if task _TASK_MICRO_SECOND is not define the bulb was flickering 
+with the milli second resolution
+================================================================================
+
+
+As there is no absolute number passed between the ESP and Arduino 
+we need to have both in sync so ESP should reset the Arduino. 
+
+
