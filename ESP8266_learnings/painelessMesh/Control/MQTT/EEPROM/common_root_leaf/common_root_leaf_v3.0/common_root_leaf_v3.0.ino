@@ -13,23 +13,51 @@
 // Revision 2.6 : Root node re-connection in the mesh has issue [ Ref gitlab ]
 // Revision 2.7 : Device initial flickering issue
 // Revision 3.0 : Dimmer device added
+// Revision 3.1 : Sending Dimmer value over interrupts
 /*
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
+#define _DEBUG_
+
+//#define _DEBUG_1
+
+#ifdef _DEBUG_
+#define _PP(a) Serial.print(a);
+#define _PL(a) Serial.println(a);
+#define _PF(a) Serial.printf(a);
+#define _PF2(a,b) Serial.printf(a,b);
+#define _PF3(a,b,c) Serial.printf(a,b,c);
+#else
+#define _PP(a)
+#define _PL(a)
+#define _PF(a)
+#define _PF2(a,b)
+#define _PF3(a,b,c)
+#endif
+
+
+#ifdef _DEBUG_1
+#define _PP1(a) Serial.print(a);
+#define _PL1(a) Serial.println(a);
+#else
+#define _PP1(a)
+#define _PL1(a)
+#endif
 
 // Task defines
 #define _TASK_MICRO_RES
 
 #include <ESP8266WiFi.h>
 #include <EEPROM.h>
-#include <SoftwareSerial.h>
 
 #define ERASE_PIN 5 // D1
 #define analogInPin A0
 
-#define VERSION "V3.0"
+#define VERSION "V3.1"
 #define MAX_RECON_ATTEMPT 18
 #define CLIENT_ID_MIN_LENGTH 18
+#define FIVE_MILLIS 5
+#define DIMMER_MAX_ITERATION 100
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
 #include <Arduino.h>
@@ -48,12 +76,6 @@ Seems like the HiveMQ is disconnecting and hence we are not able to send the com
 #define RST_CMD_STATUS     "RST_RCVD"
 #define HOSTNAME "MQTT_Bridge"
 
-#define rxPin 12 //D6
-#define txPin 14 //D5
-
-// set up a new serial port
-SoftwareSerial mySerial(rxPin, txPin);
-
 
 // Prototypes
 void rt_receivedCallback( const uint32_t &from, const String &msg );
@@ -61,7 +83,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length);
 void mqttstateCb();
 void mqttReconnectCb();
 void pingCb(); //V1.5
-void ICACHE_RAM_ATTR zeroCrossISR();
+void dimmerUpdateCb();
 
 // User stub
 void sendMessage(uint32_t from,String respStr) ; // Prototype so PlatformIO doesn't complain
@@ -76,11 +98,12 @@ WiFiClient wifiClient;
 PubSubClient mqttClient("broker.hivemq.com", 1883, mqttCallback, wifiClient);
 
 Scheduler userScheduler; // to control your personal task
+
 Task mqttstate (TASK_SECOND*90, TASK_FOREVER , &mqttstateCb);
 Task mqttReconnect (TASK_SECOND*5, MAX_RECON_ATTEMPT , &mqttReconnectCb);
 Task pingNodes(TASK_SECOND*5, MAX_RECON_ATTEMPT, &pingCb); //V1.5
 
-
+Task dimmerUpdate(FIVE_MILLIS,DIMMER_MAX_ITERATION,&dimmerUpdateCb);
 //Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
@@ -113,12 +136,11 @@ const int DIMMER_EN   = 194;
 
 const int EEPROM_END = 256;
 
-//const int DIMMER      = 12;  // D6
-//const int ZCINT       = 14; // D5
-
 const int DEVICE1     = 4;  // D2
 const int PW_LENGTH = 8;
 const int ID_LENGTH = 4;
+const int DIM_DEC   = 12; // D6
+const int DIM_INT   = 14; // D5
 
 String status = "NULL";
 String resp_type = "NULL";
@@ -160,12 +182,12 @@ void setup() {
    Serial.begin(115200);
 
    int rt_node = (EEPROM.read(NODE_TYPE)==1); // EEPROM may have junk data so assigned the value after found valid
-   Serial.print("EEPROM mode of the node : ");
-   Serial.println(rt_node);
+   _PP("EEPROM mode of the node : ");
+   _PL(rt_node);
 
    if(!digitalRead(ERASE_PIN)) { 
    	if(!erase_eeprom()) 
-		Serial.println("Erase failed ");;
+		_PL("Erase failed ");;
    }
    else if ((EEPROM.read(MID_STATUS)==1)  && (EEPROM.read(MPW_STATUS)==1) && 
             ((rt_node && (EEPROM.read(SSID_STATUS)==1) && (EEPROM.read(PASS_STATUS)==1)) || !rt_node)) {
@@ -243,7 +265,7 @@ static int rtrpwd_updated   = 0;
 
   // Read the request line
   String request = client.readStringUntil('\r');
-  Serial.println(request);
+  _PL(request);
   client.flush();
   
   if(node_type == "PENDING") {
@@ -287,7 +309,7 @@ static int rtrpwd_updated   = 0;
 
 	if(mid_updated && mpw_updated && ((root_node && rtrssid_updated && rtrpwd_updated) || !root_node)) {
 			
-		Serial.println("Confirmation received , Restarting device in to mesh mode");
+		_PL("Confirmation received , Restarting device in to mesh mode");
 		EEPROM.write(LAST_STATE,0);		
 		EEPROM.write(NODE_TYPE,root_node);
   		EEPROM.write(DIMMER_EN,isDimmer); // V3.0
@@ -305,11 +327,11 @@ static int rtrpwd_updated   = 0;
 	else {
 	}
 		if ( root_node ) {
-			Serial.println("Both Mesh and Router credentials [ID and PW] still not updated");
+			_PL("Both Mesh and Router credentials [ID and PW] still not updated");
 			value = "Update both Router and Mesh credentials";
 		}
 		else {
-			Serial.println("Both Mesh ID and PW still not updated");
+			_PL("Both Mesh ID and PW still not updated");
 			value = "Update both Mesh ID and PW ";
 		}
 
@@ -339,7 +361,7 @@ static int rtrpwd_updated   = 0;
   // Send the response to the client
   client.print(s);
   delay(1);
-  Serial.println("Client disconnected");
+  _PL("Client disconnected");
 
   // The client will actually be disconnected when the function returns and the client object is destroyed
 }
@@ -361,7 +383,7 @@ void root_node_loop() {
 
   if(myIP != getlocalIP()){
     	myIP = getlocalIP();
-    	Serial.println("My IP is " + myIP.toString());
+    	_PL("My IP is " + myIP.toString());
 	String stationIP = myIP.toString();
 	if(stationIP.indexOf("IP unset") != -1) 
 		checkmqttstatus = 0;
@@ -377,9 +399,9 @@ void root_node_loop() {
 //========================================================================================================================
 void mqttReconnectCb(){ // V1.4
 
-    	Serial.printf("Attempting to connect MQTT client : %s \n",clientId.c_str());
+    	_PF2("Attempting to connect MQTT client : %s \n",clientId.c_str());
 	if (mqttReconnect.isLastIteration()) {
-		Serial.println("Restarting as not able to connect to MQTT broker");
+		_PL("Restarting as not able to connect to MQTT broker");
 		ESP.restart();
 	}
     	else if (mqttClient.connect(clientId.c_str(), willTopic.c_str(),2,1, "DISC")) { 
@@ -390,9 +412,9 @@ void mqttReconnectCb(){ // V1.4
 	  mqttReconnect.disable();
     	} 
     	else {
-    	    Serial.print("failed , rc= ");
-    	    Serial.print(mqttClient.state());
-	    Serial.println(" Try again in 5 seconds");
+    	    _PP("failed , rc= ");
+    	    _PP(mqttClient.state());
+	    _PL(" Try again in 5 seconds");
     	}
 }
 //========================================================================================================================
@@ -409,7 +431,7 @@ int erase_eeprom ()
 int erase = 0;
 unsigned long ini_time ;
 
-	Serial.println("Hold the Erase button for 3 seconds to erase the Mesh Id and Password");
+	_PL("Hold the Erase button for 3 seconds to erase the Mesh Id and Password");
 
 	ini_time = millis();
 	while(!digitalRead(ERASE_PIN))
@@ -425,7 +447,7 @@ unsigned long ini_time ;
 		else // if more than 3 sec
 		{
 			erase = 1; 
-			Serial.println("Reelase the erase button. Erasing flash ....");
+			_PL("Reelase the erase button. Erasing flash ....");
 	                break;
 		}
 	}
@@ -435,7 +457,7 @@ unsigned long ini_time ;
 		for(int i = 0 ; i < EEPROM_END ; i++)
 			EEPROM.write(i,0);
 		EEPROM.commit();
-		Serial.println("Restarting the device ...");
+		_PL("Restarting the device ...");
 		delay(10000);
 		ESP.restart();
 	}
@@ -453,8 +475,8 @@ String idpw = "";
 	for ( int i = 0 ; i < length ; i++)
 		idpw += char(EEPROM.read(start_addr+i));
 
-  	Serial.print("Updated ID/PW from the EEPROM :");
-	Serial.println(idpw);
+  	_PP("Updated ID/PW from the EEPROM :");
+	_PL(idpw);
 
 	return idpw;
 }
@@ -462,20 +484,20 @@ String idpw = "";
 //========================================================================================================================
 void ap_mode_setup()
 {
-	Serial.println("Entering AP-mode node setup");
+	_PL("Entering AP-mode node setup");
    	WiFi.mode(WIFI_AP);
    	WiFi.softAP(ssid, password);
   
    	IPAddress Server_IP = WiFi.softAPIP();
-   	Serial.print("AP IP address: ");
-   	Serial.println(Server_IP);
+   	_PP("AP IP address: ");
+   	_PL(Server_IP);
    	server.begin();
 }
 
 //========================================================================================================================
 void root_node_setup()
 {
-   Serial.println("Entering root node setup");
+   _PL("Entering root node setup");
 
    mesh.setDebugMsgTypes( ERROR | STARTUP | CONNECTION );  // set before init() so that you can see startup messages
 
@@ -492,12 +514,13 @@ void root_node_setup()
   mesh.setContainsRoot(true);
   userScheduler.addTask(mqttstate);
   userScheduler.addTask(mqttReconnect);
+  userScheduler.addTask( dimmerUpdate );
 
 }
 //========================================================================================================================
 void leaf_node_setup() {
 
-   Serial.println("Entering leaf node setup");
+   _PL("Entering leaf node setup");
   mesh.setDebugMsgTypes( ERROR | STARTUP );  // set before init() so that you can see startup messages
 
   mesh.init( mid , mpw , mesh_port , WIFI_AP_STA, 6);
@@ -508,6 +531,7 @@ void leaf_node_setup() {
 
 //  userScheduler.addTask( taskSendMessage );
   userScheduler.addTask( pingNodes );
+  userScheduler.addTask( dimmerUpdate );
 
 //  taskSendMessage.enable();
   // This and all other mesh should ideally now the mesh contains a root
@@ -526,8 +550,8 @@ void update_id_pw(String req,String* changeObject)
 	int end_index = req.indexOf(' ',second_slash+1);    // string ends with " HTTP/1.1" Hence the last index is " "
      	*changeObject = req.substring(second_slash+1,end_index);
      	value = *changeObject;
-     	Serial.print("MESH credintial received is : ");
-     	Serial.println(*changeObject);
+     	_PP("MESH credintial received is : ");
+     	_PL(*changeObject);
      	delay(1000);
      	digitalWrite(LED_BUILTIN, LOW);
 
@@ -539,11 +563,11 @@ void eeprom_write(String idpw,int start_addr,int length_addr,int status_addr)
 
 	int length = idpw.length();
 
-	Serial.print("New ID/PW is : ");
-	Serial.println(idpw);
+	_PP("New ID/PW is : ");
+	_PL(idpw);
 
-	Serial.print("Lenght of the id/pw : ");
-	Serial.println(length);
+	_PP("Lenght of the id/pw : ");
+	_PL(length);
 
 	for ( int i = 0 ; i < length ; i++) { 
 	        EEPROM.write(start_addr+i,idpw[i]);
@@ -557,7 +581,7 @@ void eeprom_write(String idpw,int start_addr,int length_addr,int status_addr)
 // Message is recieved from the leaf nodes [ they broadcast the message ]
 void rt_receivedCallback( const uint32_t &from, const String &msg ) {
 
-  Serial.printf("bridge: Received from %u msg=%s\n", from, msg.c_str());
+  _PF3("bridge: Received from %u msg=%s\n", from, msg.c_str());
   String topic = nodeTopic + String(from);
   mqttClient.publish(topic.c_str(), msg.c_str());
 
@@ -565,12 +589,12 @@ void rt_receivedCallback( const uint32_t &from, const String &msg ) {
   // Update the nodeResponse to validate if all are updated or not
   if(update_nodeResponse(from,msg,resp_type)) {
 	if( resp_type == MID_CMD_STATUS) {
-  		Serial.printf("All ndoes %s recieved \n",resp_type.c_str());
+  		_PF2("All ndoes %s recieved \n",resp_type.c_str());
 		resp_type = RST_CMD_STATUS;
 	}
 	else if (resp_type == RST_CMD_STATUS) {
 		
-  		Serial.printf("All ndoes %s recieved \n",resp_type.c_str());
+  		_PF2("All ndoes %s recieved \n",resp_type.c_str());
 		eeprom_write(new_mid,MID_START,MID_LENGTH,MID_STATUS);
 		eeprom_write(new_mpw,MPW_START,MPW_LENGTH,MPW_STATUS);
 		// Restart CMD from gateway
@@ -609,7 +633,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 	String no_of_nodes;
 	no_of_nodes = nodelist.size();
 	respStr = nodeId + "# : " + no_of_nodes;
-	Serial.printf("Sending getList response %s\n",respStr.c_str());
+	_PF2("Sending getList response %s\n",respStr.c_str());
 
        	mqttClient.publish(gatewayTopic.c_str(),respStr.c_str());
      }
@@ -623,22 +647,22 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   		service_request(msg, &respStr);
 	}
 	else {
-		Serial.println("Dimmer not enabled");
+		_PL("Dimmer not enabled");
 		respStr = "BRI0";
 	}
 	mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
      }
 
      else if ( msg == "RESTART") {
-     	Serial.println("Restart command from the app received ....");
+     	_PL("Restart command from the app received ....");
 	ESP.restart();
      }
      else if(msg.startsWith("update_mesh")) {
 	
 	// Take the new credentials
 	if (mqtt_update_idpw(msg, &new_mid, &new_mpw, &respStr)) { 
-		Serial.printf("ID : %s \n",new_mid.c_str());
-		Serial.printf("PASS : %s \n",new_mpw.c_str());
+		_PF2("ID : %s \n",new_mid.c_str());
+		_PF2("PASS : %s \n",new_mpw.c_str());
 
     		std::list<uint32_t> nodelist = mesh.getNodeList();
     		for (std::list<uint32_t>::iterator it=nodelist.begin() ; it != nodelist.end();it++)
@@ -648,7 +672,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 		for (std::map <uint32_t, String>::iterator mitr = nodeResponse.begin(); mitr != nodeResponse.end(); mitr++)
 		{
 			
-			Serial.printf("Node Resposes : %u : %s \n",mitr->first,mitr->second.c_str());
+			_PF3("Node Resposes : %u : %s \n",mitr->first,mitr->second.c_str());
 		}
 		respStr = "Updating mesh credentials";
 		resp_type = MID_CMD_STATUS;
@@ -658,8 +682,8 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      }
      else if (msg.startsWith("update_ssid")) {
 	if(mqtt_update_idpw(msg, &new_ssid, &new_pass, &respStr)) {
-		Serial.printf("ID : %s \n",new_ssid.c_str());
-		Serial.printf("PASS : %s \n",new_pass.c_str());
+		_PF2("ID : %s \n",new_ssid.c_str());
+		_PF2("PASS : %s \n",new_pass.c_str());
 		respStr = "Updating rtr credentials";
 		eeprom_write(new_ssid,SSID_START,SSID_LENGTH,SSID_STATUS);
 		eeprom_write(new_pass,PASS_START,PASS_LENGTH,PASS_STATUS);
@@ -684,8 +708,9 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      }
 	
   }
-  else if(targetStr == "HiveClient")
-  	Serial.printf("HiveClient will Message : %s \n",msg.c_str()); 
+  else if(targetStr == "HiveClient") {
+  	_PF2("HiveClient will Message : %s \n",msg.c_str()); 
+  }
   else if(targetStr == "broadcast") 
   {
     mesh.sendBroadcast(msg);
@@ -721,7 +746,7 @@ void sendMessage(uint32_t from,String respStr) {
 // Needed for painless library
 void lf_receivedCallback( uint32_t from, String &msg ) {
 
-  Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
+  _PF3("startHere: Received from %u msg=%s\n", from, msg.c_str());
 
   String respStr;
 
@@ -730,7 +755,7 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
 	sendMessage(from,respStr);
   }
   else if ( msg == "RESTART") {
-     	Serial.println("Restart command from the app received ....");
+     	_PL("Restart command from the app received ....");
 	ESP.restart();
   }
   else if(msg.startsWith("BRI"))
@@ -739,7 +764,7 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
   		service_request(msg, &respStr);
 	}
 	else {
-		Serial.println("Dimmer not enabled");
+		_PL("Dimmer not enabled");
 		respStr = "BRI0";
 	}
 	sendMessage(from,respStr);
@@ -749,8 +774,8 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
 	
 	// Take the new credentials
 	if(mqtt_update_idpw(msg, &new_mid, &new_mpw, &respStr)){
-		Serial.printf("ID : %s \n",new_mid.c_str());
-		Serial.printf("PASS : %s \n",new_mpw.c_str());
+		_PF2("ID : %s \n",new_mid.c_str());
+		_PF2("PASS : %s \n",new_mpw.c_str());
 		respStr = MID_CMD_STATUS;
 	}
 	sendMessage(from,respStr);
@@ -767,12 +792,12 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
 }
 
 void newConnectionCallback(uint32_t nodeId) {
-    Serial.printf("--> startHere: New Connection, nodeId = %u\n", nodeId);
+    _PF2("--> startHere: New Connection, nodeId = %u\n", nodeId);
 }
 
 void changedConnectionCallback() {
     String networkTopo = mesh.subConnectionJson();
-    Serial.printf("Changed connections %s\n",networkTopo.c_str());
+    _PF2("Changed connections %s\n",networkTopo.c_str());
     
     if(!root_node) { // For leaf node             V1.5 : If the leaf node is not able to connect to any other mesh node
 	if(networkTopo.indexOf("\"root\":true") == -1) // V2.6 will also solve V1.5 as that too will not have root
@@ -786,7 +811,7 @@ void changedConnectionCallback() {
 }
 
 void nodeTimeAdjustedCallback(int32_t offset) {
-    Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
+    _PF3("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
 }
 
 
@@ -829,9 +854,27 @@ void service_request(String req, String* respStr)
 	}
 	else if(req.startsWith("BRI")) {
 		int dimVal = req.substring(3).toInt(); // Index of the first letter after D[0]I[1]M[2]
-		Serial.printf("Dimmer value : %d \n",dimVal);
+		static int lastDimValue = 100;
+		_PF2("Dimmer value : %d \n",dimVal);
 		dimVal = 100-dimVal;   // The wheel on the app is indicating brightness 
-		mySerial.print(dimVal); // Send dim value to Arduino
+		int diff = lastDimValue - dimVal; 
+		lastDimValue = dimVal;
+		_PF3("Last Dim : %d , diff : %d \n",lastDimValue,diff);
+
+		if(diff > 0) {
+			digitalWrite(DIM_DEC,HIGH);
+			_PL("DIM DEC");
+		}
+		else if(diff < 0) {
+			digitalWrite(DIM_DEC,LOW);
+			_PL("DIM INC");
+		}
+
+		diff = abs(diff);
+		if(diff) {
+			dimmerUpdate.setIterations(diff*2);
+			dimmerUpdate.restart();
+		}
 		*respStr = req;
 	}
 	else if(req == "ANSTAT") {
@@ -841,6 +884,24 @@ void service_request(String req, String* respStr)
 
 	
 
+}
+
+void dimmerUpdateCb() { 
+	
+	_PP1("Inside dimmer update Callback :");
+	_PL1(millis());
+	static bool dimInt = false;
+
+	if( dimInt ) { 
+		digitalWrite(DIM_INT,LOW);
+		_PL1("Write LOW");
+	}
+	else {
+		digitalWrite(DIM_INT,HIGH);
+		_PL1("Write HIGH");
+	}
+	
+	dimInt = !dimInt; 
 }
 
 //========================================================================================================================
@@ -879,7 +940,7 @@ int update_nodeResponse(uint32_t nodeid, String resp ,String cmd_status )
 		}
 		else 
 		{
-			Serial.printf(" Node : %u NOT FOUND \n",nodeid);
+			_PF2(" Node : %u NOT FOUND \n",nodeid);
 			return 0;
 		}
 		for(mitr = nodeResponse.begin(); mitr != nodeResponse.end();mitr++)
@@ -903,21 +964,22 @@ int update_nodeResponse(uint32_t nodeid, String resp ,String cmd_status )
 
 //========================================================================================================================
 void mqttstateCb()  {
-  	Serial.printf("MQTT connection state : %d \n",mqttClient.state()); 
+  	_PF2("MQTT connection state : %d \n",mqttClient.state()); 
 	mqttReconnect.enableIfNot();
 }
 //========================================================================================================================
 void pingCb() {  //V1.5
 	
-	if(pingNodes.isFirstIteration()) 
-		Serial.printf("\nWaiting to connect with the root node");
+	if(pingNodes.isFirstIteration()) {
+		_PF("\nWaiting to connect with the root node");
+	}
 	else if(pingNodes.isLastIteration()) {
-		Serial.printf("\nFailed to connect to the root node...\n");
-		Serial.println("Restarting the node ....");
+		_PF("\nFailed to connect to the root node...\n");
+		_PL("Restarting the node ....");
 		ESP.restart();
 	}
 	else 
-		Serial.print(".");
+		_PP(".");
 }
 //========================================================================================================================
 void extractTopicBegin() {
@@ -930,16 +992,16 @@ void extractTopicBegin() {
 		topicBegin = clientId.substring(last_index-CLIENT_ID_MIN_LENGTH); // Last 18 characters taken
 	}
 		
-	Serial.printf("All the topics will begin with : %s \n", topicBegin.c_str()); 
+	_PF2("All the topics will begin with : %s \n", topicBegin.c_str()); 
 
 	willTopic    = topicBegin + willTopic;
-	Serial.printf("Will Topic : %s \n", willTopic.c_str());
+	_PF2("Will Topic : %s \n", willTopic.c_str());
 	gatewayTopic = topicBegin + gatewayTopic;
-	Serial.printf("Gateway Topic : %s \n", gatewayTopic.c_str());
+	_PF2("Gateway Topic : %s \n", gatewayTopic.c_str());
 	hashTopic    = topicBegin + hashTopic;
-	Serial.printf("hash Topic : %s \n", hashTopic.c_str());
+	_PF2("hash Topic : %s \n", hashTopic.c_str());
 	nodeTopic    = topicBegin + nodeTopic;
-	Serial.printf("Nodes Topic : %s \n", nodeTopic.c_str());
+	_PF2("Nodes Topic : %s \n", nodeTopic.c_str());
 
 }
 //========================================================================================================================
@@ -953,10 +1015,11 @@ void ioSetup () {
    pinMode(DEVICE1, OUTPUT);
    digitalWrite(DEVICE1, LOW); // V2..7 for inital flickering  OFF at start
 
-   pinMode(rxPin, INPUT);
-   pinMode(txPin, OUTPUT);
+   pinMode(DIM_DEC, OUTPUT);
+   pinMode(DIM_INT, OUTPUT);
    // set the data rate for the SoftwareSerial port
-   mySerial.begin(9600);
+   digitalWrite(DIM_DEC,LOW);
+   digitalWrite(DIM_INT,HIGH);
 
    pinMode(ERASE_PIN,INPUT);
 
