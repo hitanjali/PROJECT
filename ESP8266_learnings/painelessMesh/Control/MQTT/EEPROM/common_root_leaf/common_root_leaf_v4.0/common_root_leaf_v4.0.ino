@@ -77,6 +77,8 @@ Seems like the HiveMQ is disconnecting and hence we are not able to send the com
 #define HOSTNAME "MQTT_Bridge"
 
 
+//======================================================================================================================== 
+
 // Prototypes
 void rt_receivedCallback( const uint32_t &from, const String &msg );
 void mqttCallback(char* topic, byte* payload, unsigned int length);
@@ -149,7 +151,6 @@ const int EEPROM_END = 256;
 // Device PINS 
 //------------------------------------------------------------------------------------------------------------------------ 
 // TODO ERASE PIN again should be function of select pins = 0;
-const int ERASE_PIN = 5;   // D1 
 
 const int SEL0      = 5;   // D1
 const int SEL1      = 4;   // D2
@@ -206,14 +207,14 @@ void setup() {
    _PP("EEPROM mode of the node : ");
    _PL(rt_node);
 
-   if(!digitalRead(ERASE_PIN)) { 
-   	if(!erase_eeprom()) 
-		_PL("Erase failed ");;
-   }
-   else if ((EEPROM.read(MID_STATUS)==1)  && (EEPROM.read(MPW_STATUS)==1) && 
+   ifEraseRequested();
+
+   if ((EEPROM.read(MID_STATUS)==1)  && (EEPROM.read(MPW_STATUS)==1) && 
             ((rt_node && (EEPROM.read(SSID_STATUS)==1) && (EEPROM.read(PASS_STATUS)==1)) || !rt_node)) {
 
 	// TODO For all devices
+	readLastState();
+
         if (EEPROM.read(LAST_STATE)) {
         	digitalWrite(DEVICE1, HIGH); 
         	status = "ON";
@@ -679,7 +680,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      }
 
      else if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK")) {
-     	service_request(msg, subTopic &respStr);
+     	service_request(msg, subTopic, &respStr);
         mqttClient.publish(gatewayTopic.c_str(),  respStr.c_str());
      }
      else if(msg.startsWith("BRI")) {                            // V3.0
@@ -755,7 +756,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   {
     mesh.sendBroadcast(msg);
      // Do the action for the root node also 
-     service_request(msg, subTopic , &respStr);
+     service_request(msg, subTopic, &respStr);
      mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
 
   }
@@ -791,7 +792,7 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
   String respStr;
 
   if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK"))  {
-  	service_request(msg, subTopic , &respStr);
+  	service_request(msg, subTopic, &respStr);
 	sendMessage(from,respStr);
   }
   else if ( msg == "RESTART") {
@@ -801,7 +802,7 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
   else if(msg.startsWith("BRI"))
   {
   	if(isDimmer) {
-  		service_request(msg, subTopic , &respStr);
+  		service_request(msg, subTopic, &respStr);
 	}
 	else {
 		_PL("Dimmer not enabled");
@@ -855,7 +856,7 @@ void nodeTimeAdjustedCallback(int32_t offset) {
 }
 
 
-void service_request(String req, ,String subTopic, String* respStr)
+void service_request(String req, String subTopic, String* respStr)
 {
 	// TODO : Control / status for the device
 	int device = subTopic.toInt();
@@ -896,6 +897,10 @@ void service_request(String req, ,String subTopic, String* respStr)
 		break;
 
 		case 8 : 
+
+		break;
+
+		case default : 
 
 		break;
 
@@ -1099,8 +1104,25 @@ void ioSetup () {
 
    // TODO sel lines and din dout
 
-   pinMode(DEVICE1, OUTPUT);
-   digitalWrite(DEVICE1, LOW); // V2..7 for inital flickering  OFF at start
+   pinMode(SEL0, OUTPUT);
+   digitalWrite(SEL0, LOW); // V2..7 for inital flickering  OFF at start
+
+   pinMode(SEL1, OUTPUT);
+   digitalWrite(SEL1, LOW); // V4.0
+
+   pinMode(SEL2, OUTPUT);
+   digitalWrite(SEL2, LOW); // V4.0
+
+   pinMode(SEL3, OUTPUT);
+   digitalWrite(SEL3, LOW); // V4.0
+
+   pinMode(SEL_EN, OUTPUT);
+   digitalWrite(SEL_EN, LOW); // V4.0
+
+   pinMode(DOUT, OUTPUT);
+   digitalWrite(DOUT, LOW); // V4.0
+
+   pinMode(DIN, INPUT);
 
    pinMode(DIM_DEC, OUTPUT);
    pinMode(DIM_INT, OUTPUT);
@@ -1108,11 +1130,63 @@ void ioSetup () {
    digitalWrite(DIM_DEC,LOW);
    digitalWrite(DIM_INT,HIGH);
 
-   pinMode(ERASE_PIN,INPUT);
-
    pinMode(LED_BUILTIN, OUTPUT);
    digitalWrite(LED_BUILTIN, HIGH); // turn off
 
-// Software serial should be configrable only in case of dimmer is true
 }
 
+// SEL_EN = 0 which does not change any o/p but If DIN follows DOUT seq then we can go for erase
+void ifEraseRequested() { 
+
+	int val = 0xF05A; // 'b11110000_01011010 
+
+	for (int i = 0; i<16;i++)
+	{
+		digitalWrite(DOUT,val.bit(i));
+
+		if (digitalRead(DIN) != val.bit(i)) {
+			_PL("Erase not intended");
+			return;
+		}
+	}
+
+	_PL("Erase EEPROM requested");
+
+	for(int i = 0 ; i < EEPROM_END ; i++)
+		EEPROM.write(i,0);
+
+	EEPROM.commit();
+	_PL("Restarting the device ...");
+	delay(10000);
+	ESP.restart();
+}
+
+int readMuxLine (int sel0, int sel1, int sel2, int sel3) { 
+	
+
+	if (sel0)
+		digitalWrite(SEL0,HIGH);
+	else
+		digitalWrite(SEL0,LOW);
+	if (sel1)
+		digitalWrite(SEL1,HIGH);
+	else
+		digitalWrite(SEL1,LOW);
+	if (sel2)
+		digitalWrite(SEL2,HIGH);
+	else
+		digitalWrite(SEL2,LOW);
+	if (sel3)
+		digitalWrite(SEL3,HIGH);
+	else
+		digitalWrite(SEL3,LOW);
+	
+	return digitalRead(DIN);
+
+	
+}
+
+void readLastState() { 
+
+	for ( int i - 0; i < 
+}
