@@ -14,7 +14,17 @@
 // Revision 2.7 : Device initial flickering issue
 // Revision 3.0 : Dimmer device added
 // Revision 3.1 : Sending Dimmer value over interrupts
-// Revision 4.0 : Mux device and topic changes accordingly
+/* Revision 4.0 : Mux device and topic changes accordingly
+                  LIMITATION : At a time only 1 of the 4 dimmers can work
+		  the same dimmer channel e.g 0 can be updated without an issue 
+		  But there can not be more than 1 simultaneous commands for update of dimmer values
+		  The reason being we use not blocking dimming controls which take time to complete max 100x5 ms = 500 ms
+		  so on the application side we would request to wait for the completion of the previous dimmer value change
+		  We can avoid this limitation by implementing max 4 different tasks for 4 different dimmers and use static device 
+		  variable in the callbacks
+
+		  Removed this limitation need to check
+*/
 /*
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
@@ -85,7 +95,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length);
 void mqttstateCb();
 void mqttReconnectCb();
 void pingCb(); //V1.5
-void dimmerUpdateCb();
+void dimmerUpdate0Cb();
+void dimmerUpdate1Cb();
+void dimmerUpdate2Cb();
+void dimmerUpdate3Cb();
 
 // User stub
 void sendMessage(uint32_t from,String respStr) ; // Prototype so PlatformIO doesn't complain
@@ -105,7 +118,10 @@ Task mqttstate (TASK_SECOND*90, TASK_FOREVER , &mqttstateCb);
 Task mqttReconnect (TASK_SECOND*5, MAX_RECON_ATTEMPT , &mqttReconnectCb);
 Task pingNodes(TASK_SECOND*5, MAX_RECON_ATTEMPT, &pingCb); //V1.5
 
-Task dimmerUpdate(FIVE_MILLIS,DIMMER_MAX_ITERATION,&dimmerUpdateCb);
+Task dimmerUpdate0(FIVE_MILLIS,DIMMER_MAX_ITERATION,&dimmerUpdate0Cb);
+Task dimmerUpdate1(FIVE_MILLIS,DIMMER_MAX_ITERATION,&dimmerUpdate1Cb);
+Task dimmerUpdate2(FIVE_MILLIS,DIMMER_MAX_ITERATION,&dimmerUpdate2Cb);
+Task dimmerUpdate3(FIVE_MILLIS,DIMMER_MAX_ITERATION,&dimmerUpdate3Cb);
 
 // ++++++++++++++++++++++++++++++++++++++++ MERGE CODE ++++++++++++++++++++++++++++++++++++++++
 
@@ -143,8 +159,9 @@ const int CID_STATUS  = 137; // 193;
 const int NODE_TYPE   = 138; // 115;
 
 const int DIMMER_EN   = 139; // 194;
+const int SIXTEEN_EN  = 140; 
 
-const int LAST_STATE_START  = 140;
+const int LAST_STATE_START  = 141;
 
 const int EEPROM_END = 256;
 //------------------------------------------------------------------------------------------------------------------------ 
@@ -160,9 +177,7 @@ const int SEL_EN    = 14;  // D5
 const int DIN       = 12;  // D6
 const int DOUT      = 13;  // D7
 
-// TODO Dimmer would be function of above select pins , hardware config fixing to last 2 lines 7,8
-const int DIM_DEC   = 12; // D6
-const int DIM_INT   = 14; // D5
+// TODO Dimmer would be function of above select pins  
 //------------------------------------------------------------------------------------------------------------------------ 
 
 String status = "NULL";
@@ -185,11 +200,12 @@ String nodeTopic     = "/painlessMesh/from/";
 
 String new_mid,new_mpw,new_ssid,new_pass;
 
-int ap_mode = 1;
-int root_node = 0;
-byte isDimmer = 0;
-byte zcFlag   = 0;
+int ap_mode    = 1;
+int root_node  = 0;
+int noOfDimmer = 0;
+byte is16      = 0;
 
+int device     = 0; // Only MQTT call back updates based on subTopic
 
 std::map <uint32_t, String> nodeResponse;
 
@@ -213,19 +229,11 @@ void setup() {
             ((rt_node && (EEPROM.read(SSID_STATUS)==1) && (EEPROM.read(PASS_STATUS)==1)) || !rt_node)) {
 
 	// TODO For all devices
-	readLastState();
 
-        if (EEPROM.read(LAST_STATE)) {
-        	digitalWrite(DEVICE1, HIGH); 
-        	status = "ON";
-        }
-        else {
-        	digitalWrite(DEVICE1, LOW);
-        	status = "OFF";
-        }
+        noOfDimmer = EEPROM.read(DIMMER_EN); // V3.0 // TODO decision based on this 
+        is16     = EEPROM.read(SIXTEEN_EN); // V4.0 // TODO decision based on this 
+	readLastState(); // TODO : What if dimmer ,need last value along with the state too
 
-
-        isDimmer = EEPROM.read(DIMMER_EN); // V3.0 // TODO decision based on this 
 
 
    	mid     = eeprom_read_idpw(MID_START,MID_LENGTH);
@@ -324,18 +332,34 @@ static int rtrpwd_updated   = 0;
       update_id_pw(request, &mpw);
       mpw_updated = 1;
   }
-  else if(request.indexOf("/dimmer_en") != -1) {
-	isDimmer = 1; // if not dimmer is disabled by default  V3.0
-	value = "Dimmer Mode Enabled";
+  else if(request.indexOf("/dimmer/") != -1) { // Dimmer_<X>  where <X> is number of dimmers [ max 4]
+	String dimString;
+	update_id_pw(request, &dimString);
+
+	noOfDimmer = dimString.toInt(); // if not dimmer is disabled by default  V3.0
+
+	if(noOfDimmer > 4) { 
+		value = "Max dimmer supported is : 4";
+	}
+	else 
+		value = "No. Of Dimmer/s : " + noOfDimmer;
   }
+  else if(request.indexOf("/sixteen_en") != -1) {
+	is16 = 1; // if not dimmer is disabled by default  V3.0
+	value = "Sixteen Channel Enabled";
+  }
+
   else if(request.indexOf("/confirmed")!=-1) {
 
 	if(mid_updated && mpw_updated && ((root_node && rtrssid_updated && rtrpwd_updated) || !root_node)) {
 			
 		_PL("Confirmation received , Restarting device in to mesh mode");
-		EEPROM.write(LAST_STATE,0);		
+		for ( int i = 0; i<16; i++)
+			EEPROM.write(LAST_STATE_START+i,0);		 // TODO : All devices junk value removal
+
 		EEPROM.write(NODE_TYPE,root_node);
-  		EEPROM.write(DIMMER_EN,isDimmer); // V3.0
+  		EEPROM.write(DIMMER_EN,noOfDimmer); // V3.0
+  		EEPROM.write(SIXTEEN_EN,is16); // V4.0
 		eeprom_write(mid,MID_START,MID_LENGTH,MID_STATUS);
 		eeprom_write(mpw,MPW_START,MPW_LENGTH,MPW_STATUS);
 		if(root_node) {
@@ -449,7 +473,7 @@ void leaf_node_loop() {
 }
 
 //========================================================================================================================
-int erase_eeprom ()
+/*int erase_eeprom ()
 {
 int erase = 0;
 unsigned long ini_time ;
@@ -487,7 +511,7 @@ unsigned long ini_time ;
 	
 	return erase;
 }
-
+*/
 //========================================================================================================================
 // Read from EEPROM 
 String eeprom_read_idpw(int start_addr, int length_addr)
@@ -537,7 +561,10 @@ void root_node_setup()
   mesh.setContainsRoot(true);
   userScheduler.addTask(mqttstate);
   userScheduler.addTask(mqttReconnect);
-  userScheduler.addTask( dimmerUpdate );
+  userScheduler.addTask( dimmerUpdate0 );
+  userScheduler.addTask( dimmerUpdate1 );
+  userScheduler.addTask( dimmerUpdate2 );
+  userScheduler.addTask( dimmerUpdate3 );
 
 }
 //========================================================================================================================
@@ -552,11 +579,12 @@ void leaf_node_setup() {
   mesh.onChangedConnections(&changedConnectionCallback);
   mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
 
-//  userScheduler.addTask( taskSendMessage );
   userScheduler.addTask( pingNodes );
-  userScheduler.addTask( dimmerUpdate );
+  userScheduler.addTask( dimmerUpdate0 );
+  userScheduler.addTask( dimmerUpdate1 );
+  userScheduler.addTask( dimmerUpdate2 );
+  userScheduler.addTask( dimmerUpdate3 );
 
-//  taskSendMessage.enable();
   // This and all other mesh should ideally now the mesh contains a root
   mesh.setContainsRoot(true);
 
@@ -604,6 +632,8 @@ void eeprom_write(String idpw,int start_addr,int length_addr,int status_addr)
 // Message is recieved from the leaf nodes [ they broadcast the message ]
 void rt_receivedCallback( const uint32_t &from, const String &msg ) {
 
+// TODO : The nodes should send the msg with subTopic string 
+//        Needs to extracted and publish topic will be to the topic with subTopic
   _PF3("bridge: Received from %u msg=%s\n", from, msg.c_str());
   String topic = nodeTopic + String(from);
   mqttClient.publish(topic.c_str(), msg.c_str());
@@ -662,6 +692,8 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
      if(msg == "getNodes")
      {
        mqttClient.publish(gatewayTopic.c_str(), mesh.subConnectionJson().c_str());
+       //mqttClient.publish(topic.c_str(), mesh.subConnectionJson().c_str()); //  TODO : If we do this we need to remove "to/from" from all the topic
+       // as the topic presently containts "to"
      }
      else if(msg == "getList") {
      
@@ -677,14 +709,17 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 	_PF2("Sending getList response %s\n",respStr.c_str());
 
        	mqttClient.publish(gatewayTopic.c_str(),respStr.c_str());
+       	// mqttClient.publish(topic.c_str(),respStr.c_str());
      }
 
      else if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK")) {
      	service_request(msg, subTopic, &respStr);
+	// TODO : Publishing topic needs to change as per the subTopic
         mqttClient.publish(gatewayTopic.c_str(),  respStr.c_str());
+        // mqttClient.publish(topic.c_str(),  respStr.c_str());
      }
      else if(msg.startsWith("BRI")) {                            // V3.0
-  	if(isDimmer) {
+  	if(noOfDimmer) {
   		service_request(msg, subTopic, &respStr);
 	}
 	else {
@@ -766,6 +801,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
     if(mesh.isConnected(target))
     {
       mesh.sendSingle(target, msg);
+      // TODO : the nodes also need to know the device [ subTopic ]
     }
     else
     {
@@ -787,6 +823,9 @@ void sendMessage(uint32_t from,String respStr) {
 // Needed for painless library
 void lf_receivedCallback( uint32_t from, String &msg ) {
 
+
+// TODO : Msg should have teh subtopic and needs to be extracted
+
   _PF3("startHere: Received from %u msg=%s\n", from, msg.c_str());
 
   String respStr;
@@ -801,7 +840,7 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
   }
   else if(msg.startsWith("BRI"))
   {
-  	if(isDimmer) {
+  	if(noOfDimmer) {
   		service_request(msg, subTopic, &respStr);
 	}
 	else {
@@ -859,77 +898,58 @@ void nodeTimeAdjustedCallback(int32_t offset) {
 void service_request(String req, String subTopic, String* respStr)
 {
 	// TODO : Control / status for the device
-	int device = subTopic.toInt();
+
+	device = subTopic.toInt();
+
+	if(noOfDimmer)
+		if((device < noOfDimmer*2) && device%2) { // Odd device subTopic in case of dimmer  
+		*respStr = "NODEV_1";
+		_PF2("Incorrect device subtopic : %d \n",device);
+		return;
+	}
+
 	_PF2("Device selected : %d \n",device);
 
-	switch ( device ) { 
-		
-		case 0 : 
 
-		break; 
-
-		case 1 : 
-
-		break;
-
-		case 2 : 
-
-		break;
-
-		case 3 : 
-
-		break;
-
-		case 4 : 
-
-		break;
-
-		case 5 : 
-
-		break;
-
-		case 6 : 
-
-		break;
-
-		case 7 : 
-
-		break;
-
-		case 8 : 
-
-		break;
-
-		case default : 
-
-		break;
-
-
-
-	}
 	if(req == "ON") {
-		if(!EEPROM.read(LAST_STATE)) {
-			EEPROM.write(LAST_STATE,1);
-			EEPROM.commit();
+		if(device >= noOfDimmer*2 ) {
+			if(!EEPROM.read(LAST_STATE_START+device)) {
+				EEPROM.write(LAST_STATE_START+device,1);
+				EEPROM.commit();
+			}
+			writeDevice(device,1);
+			*respStr = "ON";
 		}
-  		digitalWrite(DEVICE1,HIGH); 
-		*respStr = "ON";
+		else 
+			*respStr = "NODEV";
 	}
 	else if(req == "OFF") {
-		if(EEPROM.read(LAST_STATE)) {
-			EEPROM.write(LAST_STATE,0);
-			EEPROM.commit();
+		if(device >= noOfDimmer*2 ) {
+			if(EEPROM.read(LAST_STATE_START+device)) {
+				EEPROM.write(LAST_STATE_START+device,0);
+				EEPROM.commit();
+			}
+			writeDevice(device,0);
+			*respStr = "OFF";
 		}
-  		digitalWrite(DEVICE1,LOW); 
-		*respStr = "OFF";
+		else 
+			*respStr = "NODEV";
 	}
 	else if(req == "STATUS")
-		if(EEPROM.read(LAST_STATE))
-			*respStr = "ON"; // V1.3
-		else
-			*respStr = "OFF";
+		int status = EEPROM.read(LAST_STATE_START+device);
+
+		if(device >= noOfDimmer*2 ) {
+			if(status)
+				*respStr = "ON"; // V1.3
+			else
+				*respStr = "OFF";
+		}
+		else 
+			*respStr = "BRI" + status;
+
 	else if(req == "VER")
 		*respStr = VERSION;
+
 	else if(req == "BLINK") {
 		unsigned long iniTime = millis();   
 		while(millis()-iniTime < 500)
@@ -943,28 +963,30 @@ void service_request(String req, String subTopic, String* respStr)
 
 	}
 	else if(req.startsWith("BRI")) {
-		int dimVal = req.substring(3).toInt(); // Index of the first letter after D[0]I[1]M[2]
-		static int lastDimValue = 100;
+		
+		int dimmerNo = device/2; //  [ device 0,1 - dimmerNo : 0 , device 2,3 - dimmerNo - 1  ...]
+
+		if( dimmerNo > noOfDimmer ) { // if dimmer not exist
+			*respStr = "NODIM";
+			_PL("Dimmer does not exist");
+			return;
+		}
+			
+		int brightness = req.substring(3).toInt(); // Index of the first letter after D[0]I[1]M[2]
+		static int lastDimValue[4] = {100,100,100,100};
 		_PF2("Dimmer value : %d \n",dimVal);
-		dimVal = 100-dimVal;   // The wheel on the app is indicating brightness 
-		int diff = lastDimValue - dimVal; 
-		lastDimValue = dimVal;
-		_PF3("Last Dim : %d , diff : %d \n",lastDimValue,diff);
+		dimVal = 100-brightness;   // The wheel on the app is indicating brightness 
+		
 
-		if(diff > 0) {
-			digitalWrite(DIM_DEC,HIGH);
-			_PL("DIM DEC");
-		}
-		else if(diff < 0) {
-			digitalWrite(DIM_DEC,LOW);
-			_PL("DIM INC");
-		}
+		int diff = lastDimValue[dimmerNo] - dimVal; 
+		lastDimValue[dimmerNo] = dimVal;
 
-		diff = abs(diff);
-		if(diff) {
-			dimmerUpdate.setIterations(diff*2);
-			dimmerUpdate.restart();
-		}
+		EEPROM.write(LAST_STATE_START+device,brightness);
+		EEPROM.commit();
+		// Last Dim value to EEPROM
+		_PF3("Last Dim : %d , diff : %d \n",lastDimValue[dimmerNo],diff);
+
+		dimmerPinsControl(diff);
 		*respStr = req;
 	}
 	else if(req == "ANSTAT") {
@@ -976,24 +998,77 @@ void service_request(String req, String subTopic, String* respStr)
 
 }
 
-void dimmerUpdateCb() { 
+void dimmerUpdate0Cb() { 
 	
-	_PP1("Inside dimmer update Callback :");
+	_PP1("Inside dimmer update Callback 0 :");
 	_PL1(millis());
 	static bool dimInt = false;
 
 	if( dimInt ) { 
-		digitalWrite(DIM_INT,LOW);
+		writeDevice(1,0);
 		_PL1("Write LOW");
 	}
 	else {
-		digitalWrite(DIM_INT,HIGH);
+		writeDevice(1,1);
 		_PL1("Write HIGH");
 	}
 	
 	dimInt = !dimInt; 
 }
 
+void dimmerUpdate1Cb() { 
+	
+	_PP1("Inside dimmer update Callback 1 :");
+	_PL1(millis());
+	static bool dimInt = false;
+
+	if( dimInt ) { 
+		writeDevice(3,0);
+		_PL1("Write LOW");
+	}
+	else {
+		writeDevice(3,1);
+		_PL1("Write HIGH");
+	}
+	
+	dimInt = !dimInt; 
+}
+
+void dimmerUpdate2Cb() { 
+	
+	_PP1("Inside dimmer update Callback 2 :");
+	_PL1(millis());
+	static bool dimInt = false;
+
+	if( dimInt ) { 
+		writeDevice(5,0);
+		_PL1("Write LOW");
+	}
+	else {
+		writeDevice(5,1);
+		_PL1("Write HIGH");
+	}
+	
+	dimInt = !dimInt; 
+}
+
+void dimmerUpdate3Cb() { 
+	
+	_PP1("Inside dimmer update Callback 3 :");
+	_PL1(millis());
+	static bool dimInt = false;
+
+	if( dimInt ) { 
+		writeDevice(7,0);
+		_PL1("Write LOW");
+	}
+	else {
+		writeDevice(7,1);
+		_PL1("Write HIGH");
+	}
+	
+	dimInt = !dimInt; 
+}
 //========================================================================================================================
 // If the ID and PW are of sufficient length return 1 [with update id pw ] or else 0 
 int mqtt_update_idpw(String new_idpw, String* id,String* pw, String* respStr)
@@ -1124,12 +1199,6 @@ void ioSetup () {
 
    pinMode(DIN, INPUT);
 
-   pinMode(DIM_DEC, OUTPUT);
-   pinMode(DIM_INT, OUTPUT);
-   // set the data rate for the SoftwareSerial port
-   digitalWrite(DIM_DEC,LOW);
-   digitalWrite(DIM_INT,HIGH);
-
    pinMode(LED_BUILTIN, OUTPUT);
    digitalWrite(LED_BUILTIN, HIGH); // turn off
 
@@ -1161,32 +1230,93 @@ void ifEraseRequested() {
 	ESP.restart();
 }
 
-int readMuxLine (int sel0, int sel1, int sel2, int sel3) { 
+int readDevice (int device) { 
 	
 
-	if (sel0)
-		digitalWrite(SEL0,HIGH);
-	else
-		digitalWrite(SEL0,LOW);
-	if (sel1)
-		digitalWrite(SEL1,HIGH);
-	else
-		digitalWrite(SEL1,LOW);
-	if (sel2)
-		digitalWrite(SEL2,HIGH);
-	else
-		digitalWrite(SEL2,LOW);
-	if (sel3)
-		digitalWrite(SEL3,HIGH);
-	else
-		digitalWrite(SEL3,LOW);
+	digitalWrite(SEL0,device.bit[0]);
+	digitalWrite(SEL1,device.bit[1]);
+	digitalWrite(SEL2,device.bit[2]);
+	digitalWrite(SEL3,device.bit[3]);
 	
 	return digitalRead(DIN);
 
 	
 }
+void writeDevice(int device,int data) {
+
+	digitalWrite(SEL0,device.bit[0]);
+	digitalWrite(SEL1,device.bit[1]);
+	digitalWrite(SEL2,device.bit[2]);
+	digitalWrite(SEL3,device.bit[3]);
+	
+	digitalWrite(DOUT,data);
+
+	// TODO : How to latch the data / May be generating a pulse 
+	digitalWrite(SEL_EN,HIGH);
+	// some delay 
+	digitalWrite(SEL_EN,LOW);
+
+
+}
+
 
 void readLastState() { 
 
-	for ( int i - 0; i < 
+	int lastState; 
+	//TODO  Dimmer last state update
+	for ( int i = 0; i < noOfDimmer ; i ++) { 
+		lastState = EEPROM.read(LAST_STATE_START+i*2);  // Dimmer status on even address
+		device = i*2; // Dimmer device should be 0,2,4,6 : Device value needed for the dimmer pin control
+		// TODO call dimmer Pin control
+		dimmerPinsControl(lastState);
+	}
+	for ( int i = noOfDimmer*2 ; i < 8; i++) {
+		lastState = EEPROM.read(LAST_STATE_START+i);
+		writeDevice(i,lastState);
+	}
+	if( is16 ) { 
+		for ( int i = 8; i < 16; i++) {
+			lastState = EEPROM.read(LAST_STATE_START+i);
+			writeDevice(i,lastState);
+		}
+	}
+}
+
+
+void dimmerPinsControl(int diff) { 
+
+	// TODO : Control the required dimmer  bases on device value 0-3 , device 0 - pins 0,1 , device - 1 , pins 2,3 ... , deivce - 3 , pins 6,7
+
+	if(diff > 0) {
+		writeDevice(device,1);
+		_PL("DIM DEC");
+	}
+	else if(diff < 0) {
+		writeDevice(device,0);
+		_PL("DIM INC");
+	}
+
+	diff = abs(diff);
+	if(diff) {
+
+		switch (device/2) {
+		case 0 : 
+			dimmerUpdate0.setIterations(diff*2);
+			dimmerUpdate0.restart();
+		break;
+		case 1 : 
+			dimmerUpdate1.setIterations(diff*2);
+			dimmerUpdate1.restart();
+		break;
+		case 2 : 
+			dimmerUpdate2.setIterations(diff*2);
+			dimmerUpdate2.restart();
+		break;
+		case 3 : 
+			dimmerUpdate3.setIterations(diff*2);
+			dimmerUpdate3.restart();
+		break;
+			
+		}
+	}
 }
