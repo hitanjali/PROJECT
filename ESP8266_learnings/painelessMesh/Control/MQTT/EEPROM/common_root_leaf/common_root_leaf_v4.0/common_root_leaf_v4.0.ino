@@ -63,7 +63,7 @@ Seems like the HiveMQ is disconnecting and hence we are not able to send the com
 
 #define analogInPin A0
 
-#define VERSION "V3.1"
+#define VERSION "V4.0"
 #define MAX_RECON_ATTEMPT 18
 #define CLIENT_ID_MIN_LENGTH 18
 #define FIVE_MILLIS 5
@@ -193,10 +193,10 @@ int    mesh_port   = MESH_PORT;
 String value       = "Default ID and PASSWORD";
 String clientId    = "PENDING"; 
 String topicBegin;
-String willTopic     = "/painlessMesh/from/will";
-String gatewayTopic  = "/painlessMesh/from/gateway";
-String hashTopic     = "/painlessMesh/to/#";
-String nodeTopic     = "/painlessMesh/from/";
+String willTopic          = "/painlessMesh/from/will";
+String gatewayTopic       = "/painlessMesh/from/gateway";
+String hashTopic          = "/painlessMesh/to/#";
+String nodeTopic          = "/painlessMesh/from/";
 
 String new_mid,new_mpw,new_ssid,new_pass;
 
@@ -233,6 +233,9 @@ void setup() {
         noOfDimmer = EEPROM.read(DIMMER_EN); // V3.0 // TODO decision based on this 
         is16     = EEPROM.read(SIXTEEN_EN); // V4.0 // TODO decision based on this 
 	readLastState(); // TODO : What if dimmer ,need last value along with the state too
+
+	_PF2("No of dimmers : %d \n",noOfDimmer);
+	_PF2("Sixteen channels : %d \n",is16);
 
 
 
@@ -342,7 +345,8 @@ static int rtrpwd_updated   = 0;
 		value = "Max dimmer supported is : 4";
 	}
 	else 
-		value = "No. Of Dimmer/s : " + noOfDimmer;
+		value = "No Of Dimmer/s : " + dimString;
+
   }
   else if(request.indexOf("/sixteen_en") != -1) {
 	is16 = 1; // if not dimmer is disabled by default  V3.0
@@ -629,18 +633,32 @@ void eeprom_write(String idpw,int start_addr,int length_addr,int status_addr)
 	EEPROM.commit();
 }
 //========================================================================================================================
-// Message is recieved from the leaf nodes [ they broadcast the message ]
 void rt_receivedCallback( const uint32_t &from, const String &msg ) {
 
 // TODO : The nodes should send the msg with subTopic string 
 //        Needs to extracted and publish topic will be to the topic with subTopic
-  _PF3("bridge: Received from %u msg=%s\n", from, msg.c_str());
+  _PF3("Root Node : Received from %u msg=%s\n", from, msg.c_str());
   String topic = nodeTopic + String(from);
-  mqttClient.publish(topic.c_str(), msg.c_str());
+
+  int first_slash = msg.indexOf('/'); 
+  String subTopic = "NOTSET";
+  String msgX = msg;
+
+  if ( first_slash != -1) {
+	subTopic = msg.substring(0,first_slash);	
+	msgX     = msg.substring(first_slash+1);
+  }
+
+  if ( subTopic != "NOTSET") { 
+  	topic += "/" + subTopic;
+  }
+  _PF2("topic to publish : %s \n",topic.c_str());
+
+  mqttClient.publish(topic.c_str(), msgX.c_str());
 
 
   // Update the nodeResponse to validate if all are updated or not
-  if(update_nodeResponse(from,msg,resp_type)) {
+  if(update_nodeResponse(from,msg,resp_type)) { // TODO : msgX ?
 	if( resp_type == MID_CMD_STATUS) {
   		_PF2("All ndoes %s recieved \n",resp_type.c_str());
 		resp_type = RST_CMD_STATUS;
@@ -669,31 +687,33 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   String target_subTopic = String(topic).substring(topicBeginLength + 1 + 16 ); // TopicBegin length + / [1] + painlessMesh/to/ [15] + 1 for starting next
 
   String targetStr; 
-  String subTopic = "0"; // Reserved for the node instructions itself
+  String rootTopic = gatewayTopic;
+  String subTopic = "NOTSET"; // Reserved for the node instructions itself
 
   int first_slash = target_subTopic.indexOf('/'); 
 
   if ( first_slash != -1) {
   	targetStr =  target_subTopic.substring(0,first_slash);
   	subTopic  =  target_subTopic.substring(first_slash+1); // From the first slash till end 
+	rootTopic += "/" + subTopic;
   }
   else {
   	targetStr =  target_subTopic;
   }
 
+
   _PF2("Sub Topic : %s \n", subTopic.c_str());
-  _PF2("Target String %s \n", targetStr.c_str());
+  _PF2("Target String : %s \n", targetStr.c_str());
+  _PF2("Gateway Topic String : %s \n", rootTopic.c_str());
 
   String respStr;
-
+  
 
   if(targetStr == "gateway") 
   {
      if(msg == "getNodes")
      {
-       mqttClient.publish(gatewayTopic.c_str(), mesh.subConnectionJson().c_str());
-       //mqttClient.publish(topic.c_str(), mesh.subConnectionJson().c_str()); //  TODO : If we do this we need to remove "to/from" from all the topic
-       // as the topic presently containts "to"
+       mqttClient.publish(rootTopic.c_str(), mesh.subConnectionJson().c_str());
      }
      else if(msg == "getList") {
      
@@ -708,15 +728,12 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 	respStr = nodeId + "# : " + no_of_nodes;
 	_PF2("Sending getList response %s\n",respStr.c_str());
 
-       	mqttClient.publish(gatewayTopic.c_str(),respStr.c_str());
-       	// mqttClient.publish(topic.c_str(),respStr.c_str());
+       	mqttClient.publish(rootTopic.c_str(),respStr.c_str());
      }
 
      else if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK")) {
      	service_request(msg, subTopic, &respStr);
-	// TODO : Publishing topic needs to change as per the subTopic
-        mqttClient.publish(gatewayTopic.c_str(),  respStr.c_str());
-        // mqttClient.publish(topic.c_str(),  respStr.c_str());
+        mqttClient.publish(rootTopic.c_str(),  respStr.c_str());
      }
      else if(msg.startsWith("BRI")) {                            // V3.0
   	if(noOfDimmer) {
@@ -726,7 +743,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 		_PL("Dimmer not enabled");
 		respStr = "BRI0";
 	}
-	mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
+	mqttClient.publish(rootTopic.c_str(), respStr.c_str());
      }
 
      else if ( msg == "RESTART") {
@@ -754,7 +771,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 		resp_type = MID_CMD_STATUS;
 		mesh.sendBroadcast(msg);
 	}
-        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
+        mqttClient.publish(rootTopic.c_str(), respStr.c_str());
      }
      else if (msg.startsWith("update_ssid")) {
 	if(mqtt_update_idpw(msg, &new_ssid, &new_pass, &respStr)) {
@@ -763,36 +780,39 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 		respStr = "Updating rtr credentials";
 		eeprom_write(new_ssid,SSID_START,SSID_LENGTH,SSID_STATUS);
 		eeprom_write(new_pass,PASS_START,PASS_LENGTH,PASS_STATUS);
-        	//mqttClient.publish(gatewayTopic.c_str(), respStr.c_str()); // This message required if we retart with ESP command here 
 		// Restart from app
 	}
-        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
+        mqttClient.publish(rootTopic.c_str(), respStr.c_str());
      }
      else if ((resp_type == RST_CMD_STATUS) && (msg == "mesh_push")) {
      	//
 	mesh.sendBroadcast(msg);
 	respStr = "Leaf nodes will restart with new credentials";
-        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
+        mqttClient.publish(rootTopic.c_str(), respStr.c_str());
      }
      else if(msg == "mesh_cred") {
      	respStr = "Mesh ID : ";
 	respStr += mid;
-        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
+        mqttClient.publish(rootTopic.c_str(), respStr.c_str());
      	respStr = "Mesh PW : ";
 	respStr += mpw;
-        mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
+        mqttClient.publish(rootTopic.c_str(), respStr.c_str());
      }
 	
   }
-  else if(targetStr == "HiveClient") {
-  	_PF2("HiveClient will Message : %s \n",msg.c_str()); 
-  }
   else if(targetStr == "broadcast") 
   {
-    mesh.sendBroadcast(msg);
+
+     // TODO : the nodes also need to know the device [ subTopic ]
+     if ( subTopic != "NOTSET")
+     	msg = subTopic + "/" + msg;
+     
+     _PF2("Msg to broadcast with subtopic : %s \n",msg.c_str()); 
+     mesh.sendBroadcast(msg);
+
      // Do the action for the root node also 
      service_request(msg, subTopic, &respStr);
-     mqttClient.publish(gatewayTopic.c_str(), respStr.c_str());
+     mqttClient.publish(rootTopic.c_str(), respStr.c_str());
 
   }
   else
@@ -800,12 +820,17 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
     uint32_t target = strtoul(targetStr.c_str(), NULL, 10);
     if(mesh.isConnected(target))
     {
-      mesh.sendSingle(target, msg);
       // TODO : the nodes also need to know the device [ subTopic ]
+
+     if ( subTopic != "NOTSET")
+     	 msg = subTopic + "/" + msg;
+
+      _PF2("Msg to the nodes with subtopic : %s \n",msg.c_str()); 
+      mesh.sendSingle(target, msg);
     }
     else
     {
-      mqttClient.publish(gatewayTopic.c_str(), "NOCON");
+      mqttClient.publish(rootTopic.c_str(), "NOCON");
     }
   }
 }
@@ -824,15 +849,27 @@ void sendMessage(uint32_t from,String respStr) {
 void lf_receivedCallback( uint32_t from, String &msg ) {
 
 
-// TODO : Msg should have teh subtopic and needs to be extracted
-
-  _PF3("startHere: Received from %u msg=%s\n", from, msg.c_str());
-
+// TODO : Msg should have the subtopic and needs to be extracted
+   
+  int first_slash = msg.indexOf('/'); 
+  String subTopic = "NOTSET";
   String respStr;
+
+  if ( first_slash != -1) {
+	subTopic = msg.substring(0,first_slash);	
+	msg      = msg.substring(first_slash+1);
+  }
+
+  _PF3("Leaf Node : Received from %u subTopic=%s\n", from, subTopic.c_str());
+  _PF3("Leaf Node : Received from %u msg=%s\n", from, msg.c_str());
+
 
   if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK"))  {
   	service_request(msg, subTopic, &respStr);
-	sendMessage(from,respStr);
+	// TODO : Node topic needs to have the subtopic
+
+	sendMessageWithSubTopic(subTopic,from,&respStr);
+
   }
   else if ( msg == "RESTART") {
      	_PL("Restart command from the app received ....");
@@ -845,9 +882,9 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
 	}
 	else {
 		_PL("Dimmer not enabled");
-		respStr = "BRI0";
+		respStr = "NODIMMER";
 	}
-	sendMessage(from,respStr);
+	sendMessageWithSubTopic(subTopic,from,&respStr);
 
   }
   else if(msg.startsWith("update_mesh")) {
@@ -858,12 +895,12 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
 		_PF2("PASS : %s \n",new_mpw.c_str());
 		respStr = MID_CMD_STATUS;
 	}
-	sendMessage(from,respStr);
+	sendMessageWithSubTopic(subTopic,from,&respStr);
   }
   else if(msg == "mesh_push")
   {
   	respStr = RST_CMD_STATUS;
-	sendMessage(from,respStr);
+	sendMessageWithSubTopic(subTopic,from,&respStr);
 	// Write to EEPROM and restart
 	eeprom_write(new_mid,MID_START,MID_LENGTH,MID_STATUS);
 	eeprom_write(new_mpw,MPW_START,MPW_LENGTH,MPW_STATUS);
@@ -890,6 +927,14 @@ void changedConnectionCallback() {
     
 }
 
+void sendMessageWithSubTopic(String subTopic, uint32_t from, String* respStr) { 
+	if ( subTopic != "NOTSET") { 
+		*respStr = subTopic + "/" + *respStr;
+	}
+	_PF2("Response : %s \n",respStr);
+	sendMessage(from,*respStr);
+}
+
 void nodeTimeAdjustedCallback(int32_t offset) {
     _PF3("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
 }
@@ -899,20 +944,24 @@ void service_request(String req, String subTopic, String* respStr)
 {
 	// TODO : Control / status for the device
 
-	device = subTopic.toInt();
-
-	if(noOfDimmer)
-		if((device < noOfDimmer*2) && device%2) { // Odd device subTopic in case of dimmer  
-		*respStr = "NODEV_1";
-		_PF2("Incorrect device subtopic : %d \n",device);
-		return;
+	if ( subTopic != "NOTSET") { 
+		device = subTopic.toInt();
+		if(noOfDimmer)
+			if((device < noOfDimmer*2) && device%2) { // Odd device subTopic in case of dimmer  
+			*respStr = "NODEV_1";
+			_PF2("Incorrect device subtopic : %d \n",device);
+			return;
+		}
 	}
+	else 
+		device = -1;
+
 
 	_PF2("Device selected : %d \n",device);
 
 
 	if(req == "ON") {
-		if(device >= noOfDimmer*2 ) {
+		if((device >= noOfDimmer*2 ) && (device < 8*(is16+1))) {
 			if(!EEPROM.read(LAST_STATE_START+device)) {
 				EEPROM.write(LAST_STATE_START+device,1);
 				EEPROM.commit();
@@ -935,7 +984,7 @@ void service_request(String req, String subTopic, String* respStr)
 		else 
 			*respStr = "NODEV";
 	}
-	else if(req == "STATUS")
+	else if(req == "STATUS") {
 		int status = EEPROM.read(LAST_STATE_START+device);
 
 		if(device >= noOfDimmer*2 ) {
@@ -946,7 +995,7 @@ void service_request(String req, String subTopic, String* respStr)
 		}
 		else 
 			*respStr = "BRI" + status;
-
+	}
 	else if(req == "VER")
 		*respStr = VERSION;
 
@@ -974,8 +1023,8 @@ void service_request(String req, String subTopic, String* respStr)
 			
 		int brightness = req.substring(3).toInt(); // Index of the first letter after D[0]I[1]M[2]
 		static int lastDimValue[4] = {100,100,100,100};
-		_PF2("Dimmer value : %d \n",dimVal);
-		dimVal = 100-brightness;   // The wheel on the app is indicating brightness 
+		_PF2("Brightness value : %d \n",brightness);
+		int dimVal = 100-brightness;   // The wheel on the app is indicating brightness 
 		
 
 		int diff = lastDimValue[dimmerNo] - dimVal; 
@@ -1211,9 +1260,9 @@ void ifEraseRequested() {
 
 	for (int i = 0; i<16;i++)
 	{
-		digitalWrite(DOUT,val.bit(i));
+		digitalWrite(DOUT,bitRead(val,i));
 
-		if (digitalRead(DIN) != val.bit(i)) {
+		if (digitalRead(DIN) != bitRead(val,i)) {
 			_PL("Erase not intended");
 			return;
 		}
@@ -1233,10 +1282,10 @@ void ifEraseRequested() {
 int readDevice (int device) { 
 	
 
-	digitalWrite(SEL0,device.bit[0]);
-	digitalWrite(SEL1,device.bit[1]);
-	digitalWrite(SEL2,device.bit[2]);
-	digitalWrite(SEL3,device.bit[3]);
+	digitalWrite(SEL0,bitRead(device,0));
+	digitalWrite(SEL1,bitRead(device,1));
+	digitalWrite(SEL2,bitRead(device,2));
+	digitalWrite(SEL3,bitRead(device,3));
 	
 	return digitalRead(DIN);
 
@@ -1244,10 +1293,10 @@ int readDevice (int device) {
 }
 void writeDevice(int device,int data) {
 
-	digitalWrite(SEL0,device.bit[0]);
-	digitalWrite(SEL1,device.bit[1]);
-	digitalWrite(SEL2,device.bit[2]);
-	digitalWrite(SEL3,device.bit[3]);
+	digitalWrite(SEL0,bitRead(device,0));
+	digitalWrite(SEL1,bitRead(device,1));
+	digitalWrite(SEL2,bitRead(device,2));
+	digitalWrite(SEL3,bitRead(device,3));
 	
 	digitalWrite(DOUT,data);
 
