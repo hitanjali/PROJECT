@@ -25,6 +25,7 @@
 
 		  Removed this limitation need to check
 */
+// Revision 4.1 : LED_BUILTIN replaced with DOUT , as on our board we will not have 
 /*
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
@@ -172,11 +173,15 @@ const int EEPROM_END = 256;
 const int SEL0      = 5;   // D1
 const int SEL1      = 4;   // D2
 const int SEL2      = 0;   // D3
-const int SEL3      = 2;   // D4
+
+const int SEL3      = 13;  // D7 OLD 2;   // D4
 const int SEL_EN    = 14;  // D5  
 const int DIN       = 12;  // D6
-const int DOUT      = 13;  // D7
 
+const int DOUT      = 2 ;  // D4 OLD 13;  // D7
+
+const int ACT       = 0;   // D latch 4099 active low
+const int INACT     = 1;   // D latch 4099 Inactive high
 // TODO Dimmer would be function of above select pins  
 //------------------------------------------------------------------------------------------------------------------------ 
 
@@ -233,6 +238,7 @@ void setup() {
         noOfDimmer = EEPROM.read(DIMMER_EN); // V3.0 // TODO decision based on this 
         is16     = EEPROM.read(SIXTEEN_EN); // V4.0 // TODO decision based on this 
 	readLastState(); // TODO : What if dimmer ,need last value along with the state too
+	                 // Send dimmer the exaxt value and leave the last state on arduino
 
 	_PF2("No of dimmers : %d \n",noOfDimmer);
 	_PF2("Sixteen channels : %d \n",is16);
@@ -490,9 +496,9 @@ unsigned long ini_time ;
 		if ((millis()-ini_time)<3000) // Blink till the time is less than 3 sec
 		{
 			delay(500);
-			digitalWrite(LED_BUILTIN,HIGH);
+			digitalWrite(DOUT,HIGH);
 			delay(500);
-			digitalWrite(LED_BUILTIN,LOW);
+			digitalWrite(DOUT,LOW);
 	
 		}
 		else // if more than 3 sec
@@ -599,7 +605,7 @@ void leaf_node_setup() {
 
 void update_id_pw(String req,String* changeObject)
 {
-     	digitalWrite(LED_BUILTIN, HIGH);
+     	digitalWrite(DOUT, HIGH);
      	int first_slash = req.indexOf('/');
      	int second_slash = req.indexOf('/', first_slash+1);
 	int end_index = req.indexOf(' ',second_slash+1);    // string ends with " HTTP/1.1" Hence the last index is " "
@@ -608,7 +614,7 @@ void update_id_pw(String req,String* changeObject)
      	_PP("MESH credintial received is : ");
      	_PL(*changeObject);
      	delay(1000);
-     	digitalWrite(LED_BUILTIN, LOW);
+     	digitalWrite(DOUT, LOW);
 
 }
 //========================================================================================================================
@@ -973,7 +979,7 @@ void service_request(String req, String subTopic, String* respStr)
 			*respStr = "NODEV";
 	}
 	else if(req == "OFF") {
-		if(device >= noOfDimmer*2 ) {
+		if((device >= noOfDimmer*2 ) && (device < 8*(is16+1))) {
 			if(EEPROM.read(LAST_STATE_START+device)) {
 				EEPROM.write(LAST_STATE_START+device,0);
 				EEPROM.commit();
@@ -1004,9 +1010,9 @@ void service_request(String req, String subTopic, String* respStr)
 		while(millis()-iniTime < 500)
 		{
 			if(millis()-iniTime < 250)
-				digitalWrite(LED_BUILTIN,LOW);
+				digitalWrite(DOUT,LOW);
 			else
-				digitalWrite(LED_BUILTIN,HIGH);
+				digitalWrite(DOUT,HIGH);
 		} 
 		*respStr = ":)";
 
@@ -1241,19 +1247,16 @@ void ioSetup () {
    digitalWrite(SEL3, LOW); // V4.0
 
    pinMode(SEL_EN, OUTPUT);
-   digitalWrite(SEL_EN, LOW); // V4.0
+   digitalWrite(SEL_EN, INACT); // V4.0
 
    pinMode(DOUT, OUTPUT);
    digitalWrite(DOUT, LOW); // V4.0
 
    pinMode(DIN, INPUT);
 
-   pinMode(LED_BUILTIN, OUTPUT);
-   digitalWrite(LED_BUILTIN, HIGH); // turn off
-
 }
 
-// SEL_EN = 0 which does not change any o/p but If DIN follows DOUT seq then we can go for erase
+// SEL_EN = INACT which does not change any o/p but If DIN follows DOUT seq then we can go for erase
 void ifEraseRequested() { 
 
 	int val = 0xF05A; // 'b11110000_01011010 
@@ -1301,9 +1304,9 @@ void writeDevice(int device,int data) {
 	digitalWrite(DOUT,data);
 
 	// TODO : How to latch the data / May be generating a pulse 
-	digitalWrite(SEL_EN,HIGH);
+	digitalWrite(SEL_EN,ACT);
 	// some delay 
-	digitalWrite(SEL_EN,LOW);
+	digitalWrite(SEL_EN,INACT);
 
 
 }
