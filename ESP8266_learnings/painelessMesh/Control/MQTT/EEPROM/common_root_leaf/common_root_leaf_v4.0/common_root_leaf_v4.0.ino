@@ -26,6 +26,7 @@
 		  Removed this limitation need to check
 */
 // Revision 4.1 : LED_BUILTIN replaced with DOUT , as on our board we will not have 
+// Revision 4.2 : Dimmer Brightness absolute value transmit
 /*
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
@@ -210,7 +211,8 @@ int root_node  = 0;
 int noOfDimmer = 0;
 byte is16      = 0;
 
-int device     = 0; // Only MQTT call back updates based on subTopic
+int dig10;    // Needs to be accessed by the callbacks
+int dig1; 
 
 std::map <uint32_t, String> nodeResponse;
 
@@ -482,46 +484,6 @@ void leaf_node_loop() {
 
 }
 
-//========================================================================================================================
-/*int erase_eeprom ()
-{
-int erase = 0;
-unsigned long ini_time ;
-
-	_PL("Hold the Erase button for 3 seconds to erase the Mesh Id and Password");
-
-	ini_time = millis();
-	while(!digitalRead(ERASE_PIN))
-	{
-		if ((millis()-ini_time)<3000) // Blink till the time is less than 3 sec
-		{
-			delay(500);
-			digitalWrite(DOUT,HIGH);
-			delay(500);
-			digitalWrite(DOUT,LOW);
-	
-		}
-		else // if more than 3 sec
-		{
-			erase = 1; 
-			_PL("Reelase the erase button. Erasing flash ....");
-	                break;
-		}
-	}
-
-	if(erase) 
-	{
-		for(int i = 0 ; i < EEPROM_END ; i++)
-			EEPROM.write(i,0);
-		EEPROM.commit();
-		_PL("Restarting the device ...");
-		delay(10000);
-		ESP.restart();
-	}
-	
-	return erase;
-}
-*/
 //========================================================================================================================
 // Read from EEPROM 
 String eeprom_read_idpw(int start_addr, int length_addr)
@@ -950,6 +912,8 @@ void service_request(String req, String subTopic, String* respStr)
 {
 	// TODO : Control / status for the device
 
+	int device;
+
 	if ( subTopic != "NOTSET") { 
 		device = subTopic.toInt();
 		if(noOfDimmer)
@@ -1028,20 +992,10 @@ void service_request(String req, String subTopic, String* respStr)
 		}
 			
 		int brightness = req.substring(3).toInt(); // Index of the first letter after D[0]I[1]M[2]
-		static int lastDimValue[4] = {100,100,100,100};
+
 		_PF2("Brightness value : %d \n",brightness);
-		int dimVal = 100-brightness;   // The wheel on the app is indicating brightness 
-		
 
-		int diff = lastDimValue[dimmerNo] - dimVal; 
-		lastDimValue[dimmerNo] = dimVal;
-
-		EEPROM.write(LAST_STATE_START+device,brightness);
-		EEPROM.commit();
-		// Last Dim value to EEPROM
-		_PF3("Last Dim : %d , diff : %d \n",lastDimValue[dimmerNo],diff);
-
-		dimmerPinsControl(diff);
+		dimmerPinsControl(device,brightness);
 		*respStr = req;
 	}
 	else if(req == "ANSTAT") {
@@ -1059,6 +1013,18 @@ void dimmerUpdate0Cb() {
 	_PL1(millis());
 	static bool dimInt = false;
 
+	int itCount = dimmerUpdate0.getRunCounter();
+
+	//_PF2("Task Counter : %d \n",itCount);
+
+	if(itCount > ((dig10+1)*2)) { // in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
+		writeDevice(0,0);
+	}
+	else if (itCount > ((dig10+dig1+2)*2)) {
+		writeDevice(0,1);
+	}
+		
+
 	if( dimInt ) { 
 		writeDevice(1,0);
 		_PL1("Write LOW");
@@ -1069,6 +1035,7 @@ void dimmerUpdate0Cb() {
 	}
 	
 	dimInt = !dimInt; 
+
 }
 
 void dimmerUpdate1Cb() { 
@@ -1076,6 +1043,18 @@ void dimmerUpdate1Cb() {
 	_PP1("Inside dimmer update Callback 1 :");
 	_PL1(millis());
 	static bool dimInt = false;
+
+	int itCount = dimmerUpdate1.getRunCounter();
+
+	//_PF2("Task Counter : %d \n",itCount);
+
+	if (itCount > ((dig10+dig1+2)*2)) {
+		writeDevice(2,1);
+	}
+	else if(itCount > ((dig10+1)*2)) {// in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
+		writeDevice(2,0);
+	}
+		
 
 	if( dimInt ) { 
 		writeDevice(3,0);
@@ -1095,6 +1074,16 @@ void dimmerUpdate2Cb() {
 	_PL1(millis());
 	static bool dimInt = false;
 
+	int itCount = dimmerUpdate2.getRunCounter();
+
+	//_PF2("Task Counter : %d \n",itCount);
+
+	if(itCount > ((dig10+1)*2)) // in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
+		writeDevice(4,0);
+	else if (itCount > ((dig10+dig1+2)*2))
+		writeDevice(4,1);
+		
+
 	if( dimInt ) { 
 		writeDevice(5,0);
 		_PL1("Write LOW");
@@ -1112,6 +1101,16 @@ void dimmerUpdate3Cb() {
 	_PP1("Inside dimmer update Callback 3 :");
 	_PL1(millis());
 	static bool dimInt = false;
+
+	int itCount = dimmerUpdate3.getRunCounter();
+
+	//_PF2("Task Counter : %d \n",itCount);
+
+	if(itCount > ((dig10+1)*2)) // in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
+		writeDevice(6,0);
+	else if (itCount > ((dig10+dig1+2)*2))
+		writeDevice(6,1);
+		
 
 	if( dimInt ) { 
 		writeDevice(7,0);
@@ -1315,13 +1314,10 @@ void writeDevice(int device,int data) {
 void readLastState() { 
 
 	int lastState; 
-	//TODO  Dimmer last state update
-	for ( int i = 0; i < noOfDimmer ; i ++) { 
-		lastState = EEPROM.read(LAST_STATE_START+i*2);  // Dimmer status on even address
-		device = i*2; // Dimmer device should be 0,2,4,6 : Device value needed for the dimmer pin control
-		// TODO call dimmer Pin control
-		dimmerPinsControl(lastState);
-	}
+	//TODO  Dimmer last state to be maintained in the arduino
+	// As during the readLast state the tasks are not enabled no last state updated 
+
+	// Last state of the non-dimmer devices do not use tasks so get it
 	for ( int i = noOfDimmer*2 ; i < 8; i++) {
 		lastState = EEPROM.read(LAST_STATE_START+i);
 		writeDevice(i,lastState);
@@ -1335,40 +1331,42 @@ void readLastState() {
 }
 
 
-void dimmerPinsControl(int diff) { 
+void dimmerPinsControl(int device, int brightness) { 
+	
+	dig10 = brightness/10;
+	dig1  = brightness%10;
 
-	// TODO : Control the required dimmer  bases on device value 0-3 , device 0 - pins 0,1 , device - 1 , pins 2,3 ... , deivce - 3 , pins 6,7
-
-	if(diff > 0) {
-		writeDevice(device,1);
-		_PL("DIM DEC");
-	}
-	else if(diff < 0) {
-		writeDevice(device,0);
-		_PL("DIM INC");
-	}
-
-	diff = abs(diff);
-	if(diff) {
-
-		switch (device/2) {
-		case 0 : 
-			dimmerUpdate0.setIterations(diff*2);
-			dimmerUpdate0.restart();
-		break;
-		case 1 : 
-			dimmerUpdate1.setIterations(diff*2);
-			dimmerUpdate1.restart();
-		break;
-		case 2 : 
-			dimmerUpdate2.setIterations(diff*2);
-			dimmerUpdate2.restart();
-		break;
-		case 3 : 
-			dimmerUpdate3.setIterations(diff*2);
-			dimmerUpdate3.restart();
-		break;
-			
-		}
-	}
+	writeDevice(device,1);
+	callTaskN(device,(dig10+dig1+3));  // One for 10s start , 1 for 0 start and 1 for stop/completion   
+	// Total iterations = 2*(digit10 + digit1 + 3) ; after 2*(dig10 +1) iterations ; set device dimmer pin 0 in the callback 
+	                                             //; after 2*(dig1 +1) iterations ; set device dimmer pin 1 in the callback 
+	                                             //; Last iterations ; set device dimmer pin 1 in the callback  indicating end of conversion
 }
+
+void callTaskN(int device,int sumOfDigits) {
+
+	switch (device/2) {
+	case 0 : 
+		dimmerUpdate0.setIterations(sumOfDigits*2);
+		dimmerUpdate0.restart();
+	break;
+	case 1 : 
+		dimmerUpdate1.setIterations(sumOfDigits*2);
+		dimmerUpdate1.restart();
+	break;
+	case 2 : 
+		dimmerUpdate2.setIterations(sumOfDigits*2);
+		dimmerUpdate2.restart();
+	break;
+	case 3 : 
+		dimmerUpdate3.setIterations(sumOfDigits*2);
+		dimmerUpdate3.restart();
+	break;
+		
+	}
+
+
+}
+//======================================================================================================================
+// Namah Shantay Tejase
+//======================================================================================================================
