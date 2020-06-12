@@ -27,6 +27,8 @@
 */
 // Revision 4.1 : LED_BUILTIN replaced with DOUT , as on our board we will not have 
 // Revision 4.2 : Dimmer Brightness absolute value transmit
+// Revision 4.3 : Get Config for different devices
+// Revision 4.4 : Dimmer Channel 0,2,3 bug fixed
 /*
 Seems like the HiveMQ is disconnecting and hence we are not able to send the commands throght hiveMQ
 */
@@ -65,7 +67,7 @@ Seems like the HiveMQ is disconnecting and hence we are not able to send the com
 
 #define analogInPin A0
 
-#define VERSION "V4.0"
+#define VERSION "V4.4"
 #define MAX_RECON_ATTEMPT 18
 #define CLIENT_ID_MIN_LENGTH 18
 #define FIVE_MILLIS 5
@@ -698,8 +700,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 
        	mqttClient.publish(rootTopic.c_str(),respStr.c_str());
      }
-
-     else if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK")) {
+     else if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK") || (msg == "getConfig")) {
      	service_request(msg, subTopic, &respStr);
         mqttClient.publish(rootTopic.c_str(),  respStr.c_str());
      }
@@ -832,7 +833,7 @@ void lf_receivedCallback( uint32_t from, String &msg ) {
   _PF3("Leaf Node : Received from %u msg=%s\n", from, msg.c_str());
 
 
-  if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK"))  {
+  if((msg == "ON") || (msg == "OFF") || (msg == "STATUS") || (msg == "VER") || (msg == "BLINK") || (msg == "getConfig"))  {
   	service_request(msg, subTopic, &respStr);
 	// TODO : Node topic needs to have the subtopic
 
@@ -1001,6 +1002,11 @@ void service_request(String req, String subTopic, String* respStr)
 	else if(req == "ANSTAT") {
 	//	sendAnalogStatus(analogInPin);
 	}
+	else if(req == "getConfig") { 
+		*respStr = "D# " + String(noOfDimmer) + " IO# " + String((8*(is16+1) - noOfDimmer*2));
+		_PF3("No of Dimmers : %d , No of IOs : %d \n",noOfDimmer,(8*(is16+1) - noOfDimmer*2));
+	}
+
 		
 
 	
@@ -1017,12 +1023,12 @@ void dimmerUpdate0Cb() {
 
 	//_PF2("Task Counter : %d \n",itCount);
 
-	if(itCount > ((dig10+1)*2)) { // in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
-		writeDevice(0,0);
-	}
-	else if (itCount > ((dig10+dig1+2)*2)) {
+	if(itCount > ((dig10+dig1+2)*2))  // in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
 		writeDevice(0,1);
-	}
+	
+	else if (itCount > ((dig10+1)*2)) 
+		writeDevice(0,0);
+	
 		
 
 	if( dimInt ) { 
@@ -1048,12 +1054,12 @@ void dimmerUpdate1Cb() {
 
 	//_PF2("Task Counter : %d \n",itCount);
 
-	if (itCount > ((dig10+dig1+2)*2)) {
-		writeDevice(2,1);
-	}
-	else if(itCount > ((dig10+1)*2)) {// in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
-		writeDevice(2,0);
-	}
+	if (itCount > ((dig10+dig1+2)*2)) // This condition checked before as the below will be true and will not reach here if writte reverse
+		writeDevice(2,1); //STOP condition
+	
+	else if(itCount > ((dig10+1)*2)) 
+		writeDevice(2,0); // Count 1s
+	
 		
 
 	if( dimInt ) { 
@@ -1078,12 +1084,12 @@ void dimmerUpdate2Cb() {
 
 	//_PF2("Task Counter : %d \n",itCount);
 
-	if(itCount > ((dig10+1)*2)) // in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
-		writeDevice(4,0);
-	else if (itCount > ((dig10+dig1+2)*2))
+	if (itCount > ((dig10+dig1+2)*2)) 
 		writeDevice(4,1);
-		
-
+	
+	else if(itCount > ((dig10+1)*2)) 
+		writeDevice(4,0);
+	
 	if( dimInt ) { 
 		writeDevice(5,0);
 		_PL1("Write LOW");
@@ -1106,11 +1112,12 @@ void dimmerUpdate3Cb() {
 
 	//_PF2("Task Counter : %d \n",itCount);
 
-	if(itCount > ((dig10+1)*2)) // in case digit10 = 0 , on the first iteration we need to change dimmer pin 0
-		writeDevice(6,0);
-	else if (itCount > ((dig10+dig1+2)*2))
+	if (itCount > ((dig10+dig1+2)*2)) 
 		writeDevice(6,1);
-		
+	
+	else if(itCount > ((dig10+1)*2)) 
+		writeDevice(6,0);
+	
 
 	if( dimInt ) { 
 		writeDevice(7,0);
@@ -1293,6 +1300,9 @@ int readDevice (int device) {
 
 	
 }
+
+//bool fromReadLast = false;
+
 void writeDevice(int device,int data) {
 
 	digitalWrite(SEL0,bitRead(device,0));
@@ -1306,6 +1316,12 @@ void writeDevice(int device,int data) {
 	digitalWrite(SEL_EN,ACT);
 	// some delay 
 	digitalWrite(SEL_EN,INACT);
+	//if ( fromReadLast ) {
+	//	fromReadLast = false;
+	//	_PL("From read Last State");
+	//	delay(10000);
+	//}
+		
 
 
 }
@@ -1320,11 +1336,15 @@ void readLastState() {
 	// Last state of the non-dimmer devices do not use tasks so get it
 	for ( int i = noOfDimmer*2 ; i < 8; i++) {
 		lastState = EEPROM.read(LAST_STATE_START+i);
+		_PF3("Device : %d, Last State : %d \n", i,lastState);
+		//fromReadLast = true;
 		writeDevice(i,lastState);
 	}
 	if( is16 ) { 
 		for ( int i = 8; i < 16; i++) {
 			lastState = EEPROM.read(LAST_STATE_START+i);
+			_PF3("Device : %d, Last State : %d \n", i,lastState);
+			//fromReadLast = true;
 			writeDevice(i,lastState);
 		}
 	}
