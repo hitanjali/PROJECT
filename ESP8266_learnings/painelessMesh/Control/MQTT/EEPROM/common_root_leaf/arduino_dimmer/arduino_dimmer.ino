@@ -30,6 +30,8 @@
 #define _PP1(a)
 #define _PL1(a)
 #endif
+
+const byte SLOWX  = 5;
 const byte DIMVAL = 0; // Address to store value for power cycle
 
 const byte RESET = 1;
@@ -145,7 +147,7 @@ void dimValISR () {
 	_PL(dig10s);
 	_PP("No of ones : ");
 	_PL(dig1s);
-	_PP("Dim Value : ");
+	_PP1("Dim Value : ");
 	_PL1(dimVal);
 
 
@@ -153,12 +155,22 @@ void dimValISR () {
 //========================================================================================================================
 void dimmerCb () {
 
-
+	static byte slowX = SLOWX;
 	int diff = lastdimVal - dimVal;
 	if(diff > 0)
-		lastdimVal--;
+		if(slowX)
+			slowX--;
+		else {
+			slowX = SLOWX;
+			lastdimVal--;
+		}
 	else if( diff < 0)
-		lastdimVal++;
+		if(slowX)
+			slowX--;
+		else {
+			slowX = SLOWX;
+			lastdimVal++;
+		}
 		
 	dimmerStart.delay(MAX_DELAY*lastdimVal); // For 50 hz freq [10 ms half cycle] we take 9000 uS - 9 ms is the highest ON time  
 	dimmerStart.setCallback(&traicEnableCb);
