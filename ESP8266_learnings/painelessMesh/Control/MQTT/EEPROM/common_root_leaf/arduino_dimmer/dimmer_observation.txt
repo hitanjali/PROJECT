@@ -35,3 +35,16 @@ As there is no absolute number passed between the ESP and Arduino
 we need to have both in sync so ESP should reset the Arduino. 
 
 
+================================================================================
+For Arduino : detach and attache interrupt
+This was causeing flickering during : 
+	1) Arduino restart
+	2) Bulb AC mains power cycle - with arduino running
+Removing this detach and attach interrupt is not seeing stable results
+
+
+Though the normnal operation of inc and dec  BRI was working fine
+================================================================================
+
+
+
