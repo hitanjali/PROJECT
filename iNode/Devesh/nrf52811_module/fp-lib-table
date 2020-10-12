@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name NORDIC)(type KiCad)(uri ${KIPRJMOD}/NORDIC.pretty)(options "")(descr ""))
+)

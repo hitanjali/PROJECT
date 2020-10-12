@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name NORDIC)(type Legacy)(uri ${KIPRJMOD}/NORDIC.lib)(options "")(descr ""))
+)
