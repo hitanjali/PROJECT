@@ -1,0 +1,192 @@
+// Sensor Node : 
+
+
+// During the config mode the address of the mesh node should be extracted and packet will be sent to that address
+
+START : 
+		Read EEPROM for address config , zone assign , fn mode asssigment
+		if ( all done ) 
+			goto SLEEP
+		else 
+
+CHN_SCAN : 
+		CHN_SCAN:if ( config channel clear ) 
+				goto WT_MN_CMD
+
+			 else if ( NOT max attempts ) 
+			 	random delay 
+				attemmpt++
+				goto CHN_SCAN
+			
+	 		 else if (NOT  all_config_channel_checked )
+	   			Change config channel number // Next assigned channel for config // Not all 256 channels will be checked
+				goto CHN_SCAN.
+
+	   		else
+				Error LED 
+				goto WT_MN_CMD 
+
+
+WT_MN_CMD:  	if( NOT add_config_done )
+			if ( MN::SENSOR_CONFIG_START::BRDCST && NOT add_config_done) 
+				hold_flag = false
+				goto TX_CFG_REQ 
+			else if ( MN::SENSOR_CONFIG_HOLD::BRDCST)
+				hold_flag =  true
+				goto WT_MN_CMD
+                	else if ( MN::SENSOR_CONFIG_ACK_ADDRESS_CONFIRM::SN_FIXED )
+				goto SN_ADDR_CNF
+			else if ( MN::SENSOR_CONFIG_ACK_WITH_NEW_ADDRESS::SN_FIXED ) 
+				goto SN_ADDR_CHG
+		else if ( NOT zone_config_done)
+                	else if ( MN::SENSOR_IDENTIFY::SN_FIXED)
+				goto ZONE_CFG 
+			else if ( MN::SENSOR_ZONE_CONFIMRED::SN_FIXED)
+				goto ZONE_CNF
+		else if ( NOT fn_mode_config_done )
+			else if(MN::FN_MODE_PARAMETER::BRDCST)
+				hold flag = false;
+				goto CFG_FN_MODE
+			else if(MN::FN_MODE_CFG_HOLD::BRDCST)
+				hold_flag =  true
+				goto WT_MN_CMD
+			else if( MN::ENTER_FN_MODE::SN_FIXED)
+				goto ENTER_FN_MODE
+		else if(keep_alive)
+			if(MN::FN_CMD_AND_KEEP_ALIVE::SN_FIXED) 
+				goto CMD_SERVICE
+			else if(MN::FN_CMD_AND_SLEEP::SN_FIXED)
+				keep_alive = false
+				goto CMD_SERVICE
+			else if(timer over ) 
+				goto SLEEP
+
+		else if( NOT max attempts )
+			if( hold_flag ) 
+				hold led
+			else
+				attempt++
+
+			goto WT_MN_CMD
+		else
+			Error LED 
+			goto WT_MN_CMD
+
+
+TX_CFG_REQ :	
+		Transmit (SN::CGF_REQ_WITH_RANDOM_ADDRESS::MN_FIXED, goto TX_CFG_REQ_ERROR)  packet  // Addressed to the mesh node 
+		goto WT_MN_CMD
+
+TX_CFG_REQ_ERROR: 
+		ERROR LED 
+		WT_MN_CMD
+
+
+SN_ADDR_CNF :   	
+		Transmit SN:SENSOR_ADDRESS_CNF_ACK::MN_FIXED , goto SN_ADDR_CNF_ERROR 
+		EEPROM address config done
+		add_config_done = true
+		goto WT_MN_CMD. 
+
+SN_ADDR_CNF_ERROR : 
+		Error LED
+		Erase any config
+		WT_MN_CMD
+
+SN_ADDR_CHG :	
+		
+		Change self address
+		Transmit SN:SENSOR_ADDRESS_CNF_ACK::MN_FIXED, goto SN_ADDR_CHG_ERROR 
+		EEPROM address config done
+		add_config_done = true
+		goto WT_MN_CMD
+
+SN_ADDR_CHG_ERROR : 		
+		Erase recent config
+		goto WT_MN_CMD
+			
+//================================================================================
+
+ZONE_CFG :	
+		Blink LED
+		Transmit SN::REQ_ZONE_ASSIGN::MN_FIXED , goto ZONE_CFG_ERROR 
+		goto WT_MN_CMD 
+		
+ZONE_CFG_ERROR : 
+		Erase recent config
+		goto WT_MN_CMD
+			
+
+ZONE_CNF : 	
+		Transmit (SN::ZONE_ACK::MN_FIXED , goto ZONE_CNF_ERROR) 
+		EEPROM zone config done
+		goto WT_MN_CMD 
+
+ZONE_CNF_ERROR : 
+			Erase recent config
+			goto WT_MN_CMD
+			
+//================================================================================
+
+CFG_FN_MODE :  	
+		Store the channel etc as per the packet
+		Transmit SN::FN_MODE_CFG_ACK::MN_FIXED , goto CFG_FN_MODE_ERROR 
+		goto WT_MN_CMD 
+
+CFG_FN_MODE_ERROR: 	
+		Erase any recent config // go to defaults
+		goto WT_MN_CMD 
+
+ENTER_FN_MODE : 	
+		Change the channel and other params as per the request
+		EEPROM fn mode config done
+		goto SLEEP
+
+//================================================================================
+ON Interrupt : Following routine to be done
+//================================================================================
+
+FN_MODE : 	if ( MOTION_DETECT_M1_M2 ) 
+		
+		RE_ATTEMPT : Transmit SN::MOTION_DETECT_M1_M2::MN_FIXED , goto FN_MODE_ERROR
+				goto WT_MOTION_DET_ACK
+		else
+			goto SLEEP
+
+FN_MODE_ERROR : 
+		LED 
+		goto SLEEP
+
+WT_MOTION_DET_ACK : 	if(MN::MOTION_DETECT_M1_M2_ACK::SN_FIXED) 
+				goto SLEEP	
+			else if(MN::MOTION_DETECT_M1_M2_ACK_BATTERY_STATUS_REQ::SN_FIXED)
+				Transmit SN::BATTEY_STATUS::MN_FIXED
+				goto SLEEP
+			else if(MN::MOTION_DETECT_M1_M2_ACK_WITH_KEEP_ALIVE::SN_FIXED)
+				keep_alive = true;
+				goto WT_MN_CMD 
+			else if ( NOT Max attempt )  // May be 1 or 2 attempts to save battery
+				attempt++
+				goto RE_ATTEMPT
+			else
+				Blink RF error LED
+				goto SLEEP
+		
+		
+//================================================================================
+
+CMD_SERVICE : 
+		Do the actions 
+		Transmit SN::CMD_SERVICE_ACK::MN_FIXED , goto CMD_SERVICE_ERROR
+		if ( keep_alive ) 
+			goto WT_MN_CMD 
+		else 
+			goto SLEEP
+
+CMD_SERVICE_ERROR : 
+			Error LED 
+			if ( keep_alive ) 
+				goto WT_MN_CMD 
+			else 
+				goto SLEEP
+			
