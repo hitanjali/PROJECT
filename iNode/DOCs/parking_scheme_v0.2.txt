@@ -24,35 +24,35 @@ WT_CMS_CMD: 	CASE :
 			goto CHN_SCAN(TYPE)
 		(CMS::RN_CFG_START::MN_FIXED)
 			goto RN_CFG_START
-		(CMS::RELAY_ZONE_CFG::MN_FIXED)
+		(CMS::RN_ZONE_CFG::MN_FIXED)
 			goto TX_RN_IDEN
-		(CMS::RELAY_ZONE_ASSIGN::MN_FIXED)
+		(CMS::RN_ZONE_ASSIGN::MN_FIXED)
 			goto CMS_RN_ZN_REPLY
 		(CMS::SN_CFG_START::MN_FIXED)
 			goto SN_CFG_START
-		(CMS::SENSOR_ZONE_CFG::MN_FIXED)
+		(CMS::SN_ZONE_CFG::MN_FIXED)
 			goto TX_SN_IDEN
-		(CMS::SENSOR_ZONE_ASSIGN::MN_FIXED)
+		(CMS::SN_ZONE_ASSIGN::MN_FIXED)
 			goto CMS_SN_ZN_REPLY
 		(CMS::FN_MODE_CFG_START::MN_FIXED)
 			goto CFG_FN_MODE
-		(CMS::FN_ZONE_OFF_TEST::MN_FIXED)
+		(CMS::ZONE_OFF_TEST::MN_FIXED)
 			goto TEST_ZONE_OFF
-		(CMS::FN_ZONE_ON_TEST::MN_FIXED)
+		(CMS::ZONE_ON_TEST::MN_FIXED)
 			goto TEST_ZONE_ON
-		(CMS::FN_SINGLE_OFF_TEST::MN_FIXED)
+		(CMS::SINGLE_OFF_TEST::MN_FIXED)
 			goto TEST_SINGLE_OFF
-		(CMS::FN_SINGLE_ON_TEST::MN_FIXED)
+		(CMS::SINGLE_ON_TEST::MN_FIXED)
 			goto TEST_SINGLE_ON
-		(CMS::FN_SENSOR_TEST::MN_FIXED)
+		(CMS::SENSOR_TEST::MN_FIXED)
 			goto SENSOR_TEST
-		(CMS::FN_SENSOR_BAT_STATUS::MN_FIXED)
+		(CMS::SENSOR_BAT_STATUS::MN_FIXED)
 			battery_req = true;
 			goto WT_CMS_CMD  
-		(CMS::FN_CMD_AND_KEEP_ALIVE::MN_FIXED)
+		(CMS::CMD_AND_KEEP_ALIVE::MN_FIXED)
 			keep_alive = true
 			goto FN_CMD_SERVICE
-		(CMS::FN_CMD_SERVICE::MN_FIXED)
+		(CMS::CMD_SERVICE::MN_FIXED)
 			goto FN_CMD_SERVICE
 		(CMS::FN_ZONE_ADD::MN_FIXED)
 			goto FN_ZONE_ADD
@@ -85,7 +85,7 @@ CHN_SCAN : ( TYPE ) // config or func
 			goto CHN_SCAN.
 
 	   	else
-	   		Communicate with admin MN::CHN_SCAN_FAIL_ALL_<TYPE>_CHN_JAM::CMS // 
+	   		Communicate with admin MN::CHN_SCAN_FAIL::CMS // 
 			Error LED 
 			goto WT_CMS_CMD
 //========================================================================================================================
@@ -93,7 +93,7 @@ CHN_SCAN : ( TYPE ) // config or func
 
 //========================================================================================================================
 
-SN_CFG_START	: 	Transmit MN::SENSOR_CONFIG_START::BRDCST , goto SN_CFG_START_ERROR   // Address of the mesh node will be part of the packet
+SN_CFG_START	: 	Transmit MN::SN_CFG_START::BRDCST , goto SN_CFG_START_ERROR   // Address of the mesh node will be part of the packet
 			goto WT_SEN.
 
 
@@ -101,14 +101,14 @@ SN_CFG_START_ERROR :
 			Error LED 
 			goto WT_CMS_CMD
 	
-WT_SEN :  	if ( SN::CGF_REQ_WITH_RANDOM_ADDRESS::MN_FIXED packet recieved ) 
+WT_SEN :  	if ( SN::CGF_REQ_WITH_RANDOM_ADDR::MN_FIXED packet recieved ) 
 
-			Transmit (MN::SENSOR_CONFIG_HOLD::BRDCST , goto WT_SN_ERROR) // Stop all other sensors to transmit 
+			Transmit (MN::SN_CFG_HOLD::BRDCST , goto WT_SN_ERROR) // Stop all other sensors to transmit 
 
 			TX_ADDR_CNF:	if ( NOT address duplicate )
-						Transmit (MN::SENSOR_CONFIG_ACK_ADDRESS_CONFIRM::SN_FIXED, goto WT_SN_ERROR)
+						Transmit (MN::SN_ADDR_CNF::SN_FIXED, goto WT_SN_ERROR)
 					else
-						Transmit (MN::SENSOR_CONFIG_ACK_WITH_NEW_ADDRESS::SN_FIXED, goto WT_SN_ERROR) 
+						Transmit (MN::SN_ADDR_CHG::SN_FIXED, goto WT_SN_ERROR) 
 					
 					goto SN_CFG_ACK
 
@@ -120,8 +120,8 @@ WT_SN_ERROR :
 		goto WT_CMS_SMD
 
 
-SN_CFG_ACK :  	if( SN::SENSOR_ADDRESS_CNF_ACK::MN_FIXED )  // With sensor address in the pack
-			Transmit (MN::SENSOR_ATTACHED_DETAILS::CMS)
+SN_CFG_ACK :  	if( SN::SN_ADDR_CNF_ACK::MN_FIXED )  // With sensor address in the pack
+			Transmit (MN::SN_PAIRED::CMS)
 			Update Sensor configured database
 			goto WT_CMS_CMD 
 
@@ -129,7 +129,7 @@ SN_CFG_ACK :  	if( SN::SENSOR_ADDRESS_CNF_ACK::MN_FIXED )  // With sensor addres
 			attempt++
 			goto TX_ADDR_CNF
 		else 
-			Transmit : MN::SENSOR_ADDR_CNF_FAIL::CMS
+			Transmit : MN::SN_PAIR_FAIL::CMS
 			goto WT_CMS_CMD
 
 //========================================================================================================================
@@ -146,7 +146,7 @@ TX_SN_IDEN_ERROR:
 			
 
 WT_SN_ZN_REQ :	if(SN::REQ_ZONE_ASSIGN::MN_FIXED)
-			Transmit MN::SENSOR_ZONE_REQ::CMS
+			Transmit MN::SN_ZONE_REQ::CMS
 			goto WT_CMS_CMD 
 		else if( NOT Max attempt )
 			goto TX_SN_IDEN
@@ -156,7 +156,7 @@ WT_SN_ZN_REQ :	if(SN::REQ_ZONE_ASSIGN::MN_FIXED)
 			
 
 CMS_SN_ZN_REPLY: 
-			Transmit MN::SENSOR_ZONE_CONFIMRED::SN_FIXED , goto CMS_SN_ZN_REPLY_ERROR
+			Transmit MN::SN_ZONE_CNF::SN_FIXED , goto CMS_SN_ZN_REPLY_ERROR
 			goto WT_SN_ZN_CNF
 			
 CMS_SN_ZN_REPLY_ERROR : 
@@ -176,7 +176,7 @@ WT_SN_ZN_CNF : 	if( SN::ZONE_ACK::MN_FIXED)
 
 //========================================================================================================================
 RN_CFG_START :	
-			Transmit MN::RELAY_CONFIG_START::BRDCST , goto RN_CFG_START_ERROR // Address of the mesh node will be part of the packet
+			Transmit MN::RN_CFG_START::BRDCST , goto RN_CFG_START_ERROR // Address of the mesh node will be part of the packet
 			goto WT_RLY.
 
 		
@@ -184,14 +184,14 @@ RN_CFG_START :
 RN_CFG_START_ERROR : 	Error LED 
 			goto WT_CMS_CMD
 	
-WT_RLY :  	if ( RN::CGF_REQ_WITH_RANDOM_ADDRESS::MN_FIXED packet recieved ) 
+WT_RLY :  	if ( RN::CGF_REQ_WITH_RANDOM_ADDR::MN_FIXED ) 
 
-			Transmit (MN::REALY_CONFIG_HOLD::BRDCST , goto WT_SN_ERROR) // Stop all other sensors to transmit 
+			Transmit (MN::RN_CFG_HOLD::BRDCST , goto WT_RN_ERROR) // Stop all other sensors to transmit 
 
 			TX_ADDR_CNF:	if ( NOT address duplicate )
-						Transmit (MN::RELAY_CONFIG_ACK_ADDRESS_CONFIRM::RN_FIXED, goto WT_RN_ERROR)
+						Transmit (MN::RN_ADDR_CNF::RN_FIXED, goto WT_RN_ERROR)
 					else
-						Transmit (MN::RELAY_CONFIG_ACK_WITH_NEW_ADDRESS::RN_FIXED, goto WT_RN_ERROR) 
+						Transmit (MN::RN_ADDR_CHG::RN_FIXED, goto WT_RN_ERROR) 
 					
 					goto RN_CFG_ACK
 
@@ -203,8 +203,8 @@ WT_RN_ERROR :
 		goto WT_CMS_SMD
 
 
-RN_CFG_ACK :  	if( RN::RELAY_ADDRESS_CNF_ACK::MN_FIXED )  // With relay address in the pack
-			Transmit (MN::RELAY_ATTACHED_DETAILS::CMS)
+RN_CFG_ACK :  	if( RN::RN_ADDR_CNF_ACK::MN_FIXED )  // With relay address in the pack
+			Transmit (MN::RN_PAIRED::CMS)
 			Update relay configured database
 			goto WT_CMS_CMD 
 
@@ -212,7 +212,7 @@ RN_CFG_ACK :  	if( RN::RELAY_ADDRESS_CNF_ACK::MN_FIXED )  // With relay address 
 			attempt++
 			goto TX_ADDR_CNF
 		else 
-			Transmit : MN::RELAY_ADDR_CNF_FAIL::CMS
+			Transmit : MN::RN_PAIR_FAIL::CMS
 			goto WT_CMS_CMD
 
 //========================================================================================================================
@@ -228,7 +228,7 @@ TX_RN_IDEN_ERROR:
 			
 
 WT_RN_ZN_REQ :	if(RN::REQ_ZONE_ASSIGN::MN_FIXED)
-			Transmit MN::REALY_ZONE_REQ::CMS
+			Transmit MN::RN_ZONE_REQ::CMS
 			goto WT_CMS_CMD 
 		else if( NOT Max attempt )
 			goto TX_RN_IDEN
@@ -238,7 +238,7 @@ WT_RN_ZN_REQ :	if(RN::REQ_ZONE_ASSIGN::MN_FIXED)
 			
 
 CMS_RN_ZN_REPLY: 
-			Transmit MN::REALY_ZONE_CONFIMRED::SN_FIXED , goto CMS_SN_ZN_REPLY_ERROR
+			Transmit MN::RN_ZONE_CNF::SN_FIXED , goto CMS_SN_ZN_REPLY_ERROR
 			goto WT_RN_ZN_CNF
 			
 CMS_RN_ZN_REPLY_ERROR : 
@@ -246,8 +246,8 @@ CMS_RN_ZN_REPLY_ERROR :
 		goto WT_CMS_CMD 
 
 			
-WT_RN_ZN_CNF : 	if( SN::ZONE_ACK::MN_FIXED)
-			Transmit MN::REALY_ZONE_DONE::CMS
+WT_RN_ZN_CNF : 	if( SN::RN_ZONE_ACK::MN_FIXED)
+			Transmit MN::RN_ZONE_DONE::CMS
 			goto WT_CMS_CMD 
 		else if( NOT Max attempt )
 			goto CMS_RN_ZN_REPLY
@@ -275,7 +275,7 @@ CFG_FN_MODE :
 				goto FN_CHN_CHECK
 
 
-	STRT_FN_CFG :	Transmit MN::FN_MODE_PARAMETER::BRDCST , goto STRT_FN_CFG_ERROR packet // Sent the channel number for the functional mode
+	STRT_FN_CFG :	Transmit MN::FN_MODE_CFG_PARAM::BRDCST , goto STRT_FN_CFG_ERROR packet // Sent the channel number for the functional mode
 			goto WT_ACK_FROM_ZONE.
 
 
@@ -310,7 +310,7 @@ erroryy :
 
 //========================================================================================================================
 TEST_ZONE_OFF : 
-	TX_ZONE_OFF : 	Transmit MN::FN_LIGHT_OFF_ZONE::BRDCST , goto TEST_ZONE_OFF_ERROR
+	TX_ZONE_OFF : 	Transmit MN::FN_ZONE_OFF::BRDCST , goto TEST_ZONE_OFF_ERROR
 			goto WT_ZONE_OFF_TEST_ACK
 
 TEST_ZONE_OFF_ERROR : 
@@ -403,7 +403,7 @@ WT_SINGLE_OFF_TEST_ACK :
 
 SENSOR_TEST : 	if(SN::MOTION_DETECT_M1_M2::MN_FIXED)
 		SEN_ACK:Transmit MN::MOTION_DETECT_M1_M2_ACK::SN_FIXED , goto SENSOR_TEST_ERROR
-			Transmit MN::SNESOR_TEST_M1_M2_DETECT_PASS::CMS
+			Transmit MN::SNESOR_TEST_DONE::CMS
 			goto WT_CMS_CMD 
 		else if (NOT max attempt ) 
 			attempt++
@@ -421,7 +421,7 @@ SENSOR_TEST_ERROR :
 FN_MOTION_DET_ZONE_ON  : 
 			if ( battery_req ) 
 				battery_req = fasle
-				Transmit MN::MOTION_DETECT_M1_M2_ACK_BATTERY_STATUS::SN_FIXED , goto FN_MOTION_DET_ZONE_ON_ERROR
+				Transmit MN::MOTION_DETECT_M1_M2_ACK_BAT_STATUS::SN_FIXED , goto FN_MOTION_DET_ZONE_ON_ERROR
 			else
 				Transmit MN::MOTION_DETECT_M1_M2_ACK::SN_FIXED , FN_MOTION_DET_ZONE_ON_ERROR
 			TX_FN_ZONE_ON :	Transmit MN::FN_LIGHT_ON_ZONE::BRDCST , goto TEST_ZONE_ON_ERROR
@@ -451,11 +451,11 @@ FN_CMD_SERVICE :
 			if( Destination SN ) 
 				if ( keep_alive ) 
 					keep_alive = false
-					Transmit MN::FN_CMD_AND_KEEP_ALIVE::SN_FIXED , goto TEST_SINGLE_OFF_ERROR
+					Transmit MN::CMD_AND_KEEP_ALIVE::SN_FIXED , goto TEST_SINGLE_OFF_ERROR
 				else 	
-					Transmit MN::FN_CMD_AND_SLEEP::SN_FIXED , goto TEST_SINGLE_OFF_ERROR
+					Transmit MN::CMD_AND_SLEEP::SN_FIXED , goto TEST_SINGLE_OFF_ERROR
 			else
-				Transmit MN::FN_CMD_SERVICE::RN_FIXED , goto TEST_SINGLE_OFF_ERROR
+				Transmit MN::CMD_SERVICE::RN_FIXED , goto TEST_SINGLE_OFF_ERROR
 				
 			goto WT_FN_CMD_SERVICE_ACK
 
@@ -464,15 +464,15 @@ FN_CMD_SERVICE_ERROR :
 			goto WT_CMS_CMD 
 
 WT_FN_CMD_SERVICE_ACK : 	
-				if (SN/RN::FN_CMD_SERVICE_ACK::MN_FIXED)
+				if (SN/RN::CMD_SERVICE_ACK::MN_FIXED)
 					register the ack for RN of the SINGLE
-					MN::FN_CMD_SERVICE_DONE::CMS
+					MN::CMD_SERVICE_DONE::CMS
 					goto WT_CMS_CMD 
 				else if( NOT max attempt)
 					attempt++
 					goto FN_CMD_SERVICE
 				else 
-					Transmit MN::FN_CMD_SERVICE_FAIL::CMS
+					Transmit MN::CMD_SERVICE_FAIL::CMS
 					goto WT_CMS_CMD
 
 

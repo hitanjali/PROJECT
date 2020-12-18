@@ -6,48 +6,35 @@ START :
 		Read EEPROM for address config , zone assign , fn mode asssigment
 			
 		if ( all done ) 
-			goto WT_MN_CMD
+			change the channel and other parameters to the stored params
 		else 
-		CHN_SCAN:if ( config channel clear ) 
-				goto WT_MN_CMD
-
-			 else if ( NOT max attempts ) 
-			 	random delay 
-				attemmpt++
-				goto CHN_SCAN
-			
-	 		 else if (NOT  all_config_channel_checked )
-	   			Change config channel number // Next assigned channel for config // Not all 256 channels will be checked
-				goto CHN_SCAN.
-
-	   		else
-				Error LED 
-				goto WT_MN_CMD 
-			
+			default parameters to be programmed 
+			config_chn_assigned = false;
 
 
+		goto WT_MN_CMD 
 
 
 WT_MN_CMD:  	if( NOT add_config_done ) 
-			if(MN::CFG_CHN_NUM::BRDCST)
-				goto CFG_CHN_NUM 
-			else if ( MN::RELAY_CONFIG_START::BRDCST ) 
+			if ( MN::RN_CFG_START::BRDCST ) 
 				hold_flag = false
 				goto TX_CFG_REQ 
-			else if ( MN::RELAY_CONFIG_HOLD::BRDCST)
+			else if ( MN::RN_CFG_HOLD::BRDCST)
 				hold_flag =  true
 				goto WT_MN_CMD
-                	else if ( MN::RELAY_CONFIG_ACK_ADDRESS_CONFIRM::SN_FIXED )
+                	else if ( MN::RN_ADDR_CNF::SN_FIXED )
 				goto RN_ADDR_CNF
-			else if ( MN::RELAY_CONFIG_ACK_WITH_NEW_ADDRESS::SN_FIXED ) 
+			else if ( MN::RN_ADDR_CHG::SN_FIXED ) 
 				goto RN_ADDR_CHG
+			else if( NOT config_chn_assigned && Timer expired ) // Need to wait in this channel for some time
+				goto CFG_CHN_HOP
 		else if ( NOT zone_config_done)
                 	else if ( MN::RELAY_IDENTIFY::RN_FIXED)
 				goto ZONE_CFG 
-			else if ( MN::RELAY_ZONE_CONFIMRED::RN_FIXED)
+			else if ( MN::RN_ZONE_CNF::RN_FIXED)
 				goto ZONE_CNF
 		else if ( NOT fn_mode_config_done )
-			else if(MN::FN_MODE_PARAMETER::BRDCST)
+			else if(MN::FN_MODE_CFG_PARAM::BRDCST)
 				hold flag = false;
 				goto CFG_FN_MODE
 			else if(MN::FN_MODE_CFG_HOLD::BRDCST)
@@ -55,9 +42,9 @@ WT_MN_CMD:  	if( NOT add_config_done )
 				goto WT_MN_CMD
 			else if( MN::ENTER_FN_MODE::SN_FIXED)
 				goto ENTER_FN_MODE
-		else if(MN::FN_LIGHT_ON_ZONE::BRDCST || MN::FN_LIGHT_ON_SINGLE::RN_FIXED)
+		else if(MN::FN_ZONE_ON::BRDCST || MN::FN_SINGLE_ON::RN_FIXED)
 			goto FN_ON
-		else if(MN::FN_LIGHT_OFF_ZONE::BRDCST || MN::FN_LIGHT_OFF_SINGLE::RN_FIXED)
+		else if(MN::FN_ZONE_OFF::BRDCST || MN::FN_SINGLE_OFF::RN_FIXED)
 			goto FN_OFF
 		else if(MN::FN_ADD_ZONE::RN_FIXED)
 			zone_config_add = true;  // Will do on the functional channel itself
@@ -67,7 +54,7 @@ WT_MN_CMD:  	if( NOT add_config_done )
 			zone_config_done = false; // Will do on the functional channel itself
 			goto WT_CMS_CMD
 			
-		else if(MN::FN_CMD_SERVICE::RN_FIXED)
+		else if(MN::CMD_SERVICE::RN_FIXED)
 			goto FN_CMD_SERVICE 
 
 		else if( NOT max attempts )
@@ -82,14 +69,16 @@ WT_MN_CMD:  	if( NOT add_config_done )
 			goto WT_MN_CMD
 
 //================================================================================
-CFG_CHN_NUM : 
+CFG_CHN_HOP : 
 
-	Change channel Number to the given channel number
+	Change config channel to the next available channel
+	Start channel timer 
 	goto WT_MN_CMD 
 //================================================================================
 
 TX_CFG_REQ :	
-		Transmit (RN::CGF_REQ_WITH_RANDOM_ADDRESS::MN_FIXED, goto TX_CFG_REQ_ERROR)  packet  // Addressed to the mesh node 
+		config_chn_assigned = true;
+		Transmit (RN::CGF_REQ_WITH_RANDOM_ADDR::MN_FIXED, goto TX_CFG_REQ_ERROR)  packet  // Addressed to the mesh node 
 		goto WT_MN_CMD
 
 TX_CFG_REQ_ERROR: 
@@ -98,7 +87,7 @@ TX_CFG_REQ_ERROR:
 
 
 RN_ADDR_CNF :   	
-		Transmit RN:RELAY_ADDRESS_CNF_ACK::MN_FIXED , goto RN_ADDR_CNF_ERROR 
+		Transmit RN:RN_ADDR_CNF_ACK::MN_FIXED , goto RN_ADDR_CNF_ERROR 
 		EEPROM address config done
 		add_config_done = true
 		goto WT_MN_CMD. 
@@ -111,7 +100,7 @@ RN_ADDR_CNF_ERROR :
 RN_ADDR_CHG :	
 		
 		Change self address
-		Transmit RN:RELAY_ADDRESS_CNF_ACK::MN_FIXED, goto RN_ADDR_CHG_ERROR 
+		Transmit RN:RN_ADDR_CNF_ACK::MN_FIXED, goto RN_ADDR_CHG_ERROR 
 		EEPROM address config done
 		add_config_done = true
 		goto WT_MN_CMD
@@ -133,7 +122,7 @@ ZONE_CFG_ERROR :
 			
 
 ZONE_CNF : 	
-		Transmit (RN::ZONE_ACK::MN_FIXED , goto ZONE_CNF_ERROR) 
+		Transmit (RN:RN_ZONE_ACK::MN_FIXED , goto ZONE_CNF_ERROR) 
 		if( zone_config_add ) 
 			add new zone info
 			zone_config_add = false
