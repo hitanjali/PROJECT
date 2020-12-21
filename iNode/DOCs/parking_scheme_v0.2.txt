@@ -57,7 +57,7 @@ WT_CMS_CMD:
 		(CMS::CMD_AND_KEEP_ALIVE::MN_FIXED)
 			keep_alive = true
 			goto FN_CMD_SERVICE
-		(CMS::CMD_SERVICE::MN_FIXED)
+		(CMS::CMD_SERVICE::MN_FIXED::RN/SN)
 			goto FN_CMD_SERVICE
 		(CMS::FN_ZONE_ADD::MN_FIXED)
 			goto FN_ZONE_ADD
@@ -568,7 +568,7 @@ Functions
 
 Transmit(SRC::PACK_TYPE::DEST, JUMP_FAILED)   {
 
-CLR_CHN_CHK:	if(clear channel ) 
+CLR_CHN_CHK:	if(clear channel )  // Carrier Sense
 			Tx SRC::PACK_TYPE::DEST
 		else if ( NOT maxt attempt ) 
 			attempt++
@@ -581,3 +581,4 @@ CLR_CHN_CHK:	if(clear channel )
 }
 
 
+// Dedicated channel for error reporting 

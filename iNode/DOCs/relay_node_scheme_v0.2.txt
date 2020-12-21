@@ -26,6 +26,8 @@ WT_MN_CMD:  	if( NOT add_config_done )
 				goto RN_ADDR_CNF
 			else if ( MN::RN_ADDR_CHG::SN_FIXED ) 
 				goto RN_ADDR_CHG
+			else if( MN::DYULABS_HEARTBEAT::BRDCST)
+				goto BLINK_HEART
 			else if( NOT config_chn_assigned && Timer expired ) // Need to wait in this channel for some time
 				goto CFG_CHN_HOP
 		else if ( NOT zone_config_done)
@@ -78,12 +80,13 @@ CFG_CHN_HOP :
 	goto WT_MN_CMD 
 //================================================================================
 BLINK_HEART : 
+	config_chn_assigned = true;
 	Blink LED for heart beat 
 	goto WT_MN_CMD 
 //================================================================================
 TX_CFG_REQ :	
 		config_chn_assigned = true;
-		Transmit (RN::CGF_REQ_WITH_RANDOM_ADDR::MN_FIXED, goto TX_CFG_REQ_ERROR)  packet  // Addressed to the mesh node 
+		Transmit (RN::CGF_REQ_WITH_RANDOM_ADDR::MN_FIXED, goto TX_CFG_REQ_ERROR)  packet  // Addressed to the mesh node // With UID
 		goto WT_MN_CMD
 
 TX_CFG_REQ_ERROR: 
