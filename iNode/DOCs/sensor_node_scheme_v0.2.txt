@@ -50,6 +50,8 @@ WT_MN_CMD:  	if( NOT add_config_done )
 			else if(timer over ) 
 				goto SLEEP
 
+		else if( MN::DYULABS_HEARTBEAT::BRDCST)
+			goto BLINK_HEART
 		else if( NOT max attempts )
 			if( hold_flag ) 
 				hold led
@@ -67,6 +69,10 @@ CFG_CHN_HOP :
 
 	Change config channel to the next available channel
 	Start channel timer 
+	goto WT_MN_CMD 
+//================================================================================
+BLINK_HEART : 
+	Blink LED for heart beat 
 	goto WT_MN_CMD 
 //================================================================================
 TX_CFG_REQ :	

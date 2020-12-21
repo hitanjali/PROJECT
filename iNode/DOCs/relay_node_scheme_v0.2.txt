@@ -55,8 +55,10 @@ WT_MN_CMD:  	if( NOT add_config_done )
 			goto WT_CMS_CMD
 			
 		else if(MN::CMD_SERVICE::RN_FIXED)
-			goto FN_CMD_SERVICE 
+			goto CMD_SERVICE 
 
+		else if( MN::DYULABS_HEARTBEAT::BRDCST)
+			goto BLINK_HEART
 		else if( NOT max attempts )
 			if( hold_flag ) 
 				hold led
@@ -75,7 +77,10 @@ CFG_CHN_HOP :
 	Start channel timer 
 	goto WT_MN_CMD 
 //================================================================================
-
+BLINK_HEART : 
+	Blink LED for heart beat 
+	goto WT_MN_CMD 
+//================================================================================
 TX_CFG_REQ :	
 		config_chn_assigned = true;
 		Transmit (RN::CGF_REQ_WITH_RANDOM_ADDR::MN_FIXED, goto TX_CFG_REQ_ERROR)  packet  // Addressed to the mesh node 

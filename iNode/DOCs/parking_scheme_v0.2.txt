@@ -17,11 +17,16 @@ START : default config channel and sync word settings
 	
 
 
-WT_CMS_CMD: 	CASE : 
-		
+WT_CMS_CMD: 	
+
+	CASE : 
 		
 		(CMS::CHN_SCAN_TYPE::MN_FIXED)
 			goto CHN_SCAN(TYPE)
+		(CMS::HEARTBEAT_ON::MN_FIXED)
+			goto HEARTBEAT_ON
+		(CMS::HEARTBEAT_OFF::MN_FIXED)
+			goto HEARTBEAT_OFF
 		(CMS::RN_CFG_START::MN_FIXED)
 			goto RN_CFG_START
 		(CMS::RN_ZONE_CFG::MN_FIXED)
@@ -72,7 +77,7 @@ CHN_SCAN : ( TYPE ) // config or func
 		if ( channel clear ) 
 			MN::CHN_SCAN_PASS::CMS
 
-			goto WT_CMS_CMD
+			goto HEARTBEAT
 
 
 		 else if ( NOT max attempts ) 
@@ -89,7 +94,22 @@ CHN_SCAN : ( TYPE ) // config or func
 			Error LED 
 			goto WT_CMS_CMD
 //========================================================================================================================
+HEARTBEAT_ON : 
+		Heart beat timer configure 
+		heartbeat Interrupt Enable 
+		goto WT_CMS_CMD
+//========================================================================================================================
+HEARTBEAT_OFF : 
+		heartbeat timer stop
+		heartbeat interrupt disable 
+		goto WT_CMS_CMD
+//========================================================================================================================
 
+heartbeat_ISR : 
+		// On timer expire we will transmit heartbeat 
+
+		Trasmit MN_FIXED::DYULABS_HEARTBEAT::BRDCST
+		goto WT_CMS_CMD 
 
 //========================================================================================================================
 
@@ -117,7 +137,7 @@ WT_SEN :  	if ( SN::CGF_REQ_WITH_RANDOM_ADDR::MN_FIXED packet recieved )
 
 WT_SN_ERROR : 
 		Error LED 
-		goto WT_CMS_SMD
+		goto WT_CMS_CMD
 
 
 SN_CFG_ACK :  	if( SN::SN_ADDR_CNF_ACK::MN_FIXED )  // With sensor address in the pack
@@ -200,7 +220,7 @@ WT_RLY :  	if ( RN::CGF_REQ_WITH_RANDOM_ADDR::MN_FIXED )
 
 WT_RN_ERROR : 
 		Error LED 
-		goto WT_CMS_SMD
+		goto WT_CMS_CMD
 
 
 RN_CFG_ACK :  	if( RN::RN_ADDR_CNF_ACK::MN_FIXED )  // With relay address in the pack
