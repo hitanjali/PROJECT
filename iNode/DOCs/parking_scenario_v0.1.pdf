@@ -1,0 +1,455 @@
+// There are 26 channels available : CC110L 
+// Config channel will be reserved and would not be used for functional mode. 
+
+//========================================================================================================================
+// Only for Config : 
+
+// We may choose to have Mesh node to transmit to sensor node with SYNC_WORD1 
+// And the sensor node may reply back to mesh node using different SYNC_WORD2
+
+// We may choose to have Mesh node to transmit to realy  node with SYNC_WORD3 
+// And the relay  node may reply back to mesh node using different SYNC_WORD4
+//========================================================================================================================
+
+
+
+Start with default config channel and sync word settings
+
+WT_CMS_CMD: 	CASE : 
+		
+		
+		(CMS::RN_CFG_START::MN_FIXED)
+			goto RN_CFG_START
+		(CMS::SN_CFG_START::MN_FIXED)
+			goto SN_CFG_START
+		(CMS::SENSOR_ZONE_CFG::MN_FIXED)
+			goto TX_SN_IDEN
+		(CMS::SENSOR_ZONE_ASSIGN::MN_FIXED)
+			goto CMS_SN_ZN_REPLY
+		(CMS::FN_MODE_CFG_START::MN_FIXED)
+			goto CFG_FN_MODE
+		(CMS::FN_ZONE_OFF_TEST::MN_FIXED)
+			goto TEST_ZONE_OFF
+
+		default:
+
+			goto WT_CMS_CMD
+
+SN_CFG_START :	if ( config channel clear ) 
+			Transmit MN::SENSOR_CONFIG_START::BRDCST packet // Address of the mesh node will be part of the packet
+			goto WT_SEN.
+
+		 else if ( NOT max attempts ) 
+		 	random delay 
+			attemmpt++
+			goto SN_CFG_START
+		
+	 	 else if (NOT  all_config_channel_checked )
+	   		Change config channel number // Next assigned channel for config // Not all 256 channels will be checked
+			got to SN_CFG_START.
+
+	   	else
+	   		Communicate with admin MN::SN_CONFIG_START_FAIL_ALL_CHANNEL_JAM::CMS
+			Error LED 
+			goto WT_CMS_CMD
+	
+WT_SEN :  	if ( SN::CGF_REQ_WITH_RANDOM_ADDRESS::MN_FIXED packet recieved ) 
+
+			Transmit (MN::SENSOR_CONFIG_HOLD::BRDCST , goto WT_SN_ERROR) // Stop all other sensors to transmit 
+
+			TX_ADDR_CNF:	if ( NOT address duplicate )
+						Transmit (MN::SENSOR_CONFIG_ACK_ADDRESS_CONFIRM::SN_FIXED, goto WT_SN_ERROR)
+					else
+						Transmit (MN::SENSOR_CONFIG_ACK_WITH_NEW_ADDRESS::SN_FIXED, goto WT_SN_ERROR) 
+					
+					goto SN_CFG_ACK
+
+		else  
+			goto SN_CFG_START
+
+WT_SN_ERROR : 
+		Error LED 
+		goto WT_CMS_SMD
+
+
+SN_CFG_ACK :  	if( SN::SENSOR_ADDRESS_CNF_ACK::MN_FIXED )  // With sensor address in the pack
+			Transmit (MN::SENSOR_ATTACHED_DETAILS::CMS)
+			Update Sensor configured database
+			goto WT_CMS_CMD 
+
+		else if ( NOT Max attempts ) 
+			attempt++
+			goto TX_ADDR_CNF
+		else 
+			Transmit : MN::SENSOR_ADDR_CNF_FAIL::CMS
+			goto WT_CMS_CMD
+
+//========================================================================================================================
+
+TX_SN_IDEN :	
+		Transmit MN::SENSOR_IDENTIFY::SN_FIXED , goto TX_SN_IDEN_ERROR 
+		goto WT_SN_ZN_REQ
+			
+TX_SN_IDEN_ERROR:		
+		Error LED Sensor Zone config
+		goto WT_CMS_CMD
+			
+
+WT_SN_ZN_REQ :	if(SN::REQ_ZONE_ASSIGN::MN_FIXED)
+			Transmit MN::SENSOR_ZONE_REQ::CMS
+			goto WT_CMS_CMD 
+		else if( NOT Max attempt )
+			goto TX_SN_IDEN
+		else
+			MN::SENSOR_ZONE_CFG_FAIL_NO_COMM::CMS
+			goto WT_CMS_CMD 
+			
+
+CMS_SN_ZN_REPLY: 
+			Transmit MN::SENSOR_ZONE_CONFIMRED::SN_FIXED , goto CMS_SN_ZN_REPLY_ERROR
+			goto WT_SN_ZN_CNF
+			
+CMS_SN_ZN_REPLY_ERROR : 
+		Error LED 
+		goto WT_CMS_CMD 
+
+			
+WT_SN_ZN_CNF : 	if( SN::ZONE_ACK::MN_FIXED)
+			Transmit MN::SENSOR_ZONE_DONE::CMS
+			goto WT_CMS_CMD 
+		else if( NOT Max attempt )
+			goto CMS_SN_ZN_REPLY
+		else
+			ERROR 
+			goto WT_CMS_CMD
+
+//================================================================================
+WT_RN_ZN_REQ :	if(RN::REQ_ZONE_ASSIGN::MN_FIXED)
+			Transmit MN::RELAY_ZONE_REQ::CMS
+			goto CMS_RN_ZN_REPLY
+		else if( NOT Max attempt )
+			goto ZONE_CFG
+		else
+			goto ZONE_CFG
+			
+
+CMS_RN_ZN_REPLY: if(CMS::RELAY_ZONE_ASSIGN::MN_FIXED)
+			Transmit MN::RELAY_ZONE_CONFIMRED::RN_FIXED
+			goto WT_RN_ZN_CNF
+		else
+			goto CMS_RN_ZN_REPLY
+			
+			
+			
+WT_RN_ZN_CNF : 	if( RN::ZONE_ACK::MN_FIXED)
+			Transmit MN::RELAY_ZONE_DONE::CMS
+			goto WT_CMS_CMD
+		else if( NOT Max attempt )
+			goto WT_RN_ZN_CNF
+		else
+			ERROR 
+			goto WT_CMS_CMD 
+
+
+//========================================================================================================================
+			
+RN_CFG_START : 	if ( config channel clear ) 
+			Transmit MN::RELAY_CONFIG_START::BRDCST packet // Address of the mesh node will be part of the packet
+			goto WT_RLY.
+
+		 else if ( NOT max attempts ) 
+		 	random delay 
+			attemmpt++
+			goto RN_CFG
+		
+	 	 else if ( all_config_channel_checked )
+	   		Communicate with admin MN::RLY_CONFIG_START_FAIL_ALL_CHANNEL_JAM::CMS
+			goto END
+
+	   	else
+	   		Change config channel number // Next assigned channel for config // Not all 256 channels will be checked
+			goto RN_CFG.
+	
+WT_RLY :  	if ( RN::CGF_REQ_RANDOM_ADDRESS::MN_FIXED packet recieved ) 
+			Transmit MN:: RELAY_CONFIG_HOLD::BRDCST // Stop all other sensors to transmit 
+
+			if ( NOT address duplicate )
+				Transmit MN:: RELAY_CONFIG_ACK_ADDRESS_CONFIRM::RN_FIXED
+			else
+				Transmit MN:: RELAY_CONFIG_ACK_WITH_NEW_ADDRESS::RN_FIXED 
+				
+			goto RN_CFG_ACK
+		else  
+			goto RN_CFG
+
+
+RN_CFG_ACK :  	if ( RN::RELAY_ADDRESS_CNF_ACK::MN_FIXED ) 
+			Transmit MN::RELAY_EXIT_CFG_MODE::RN_FIXED packet
+			Transmit MN::RELAY_ATTACHED_DETAILS::CMS
+			Update realy configured database
+			RELAY_CONFIG_TRUE
+			if ( CMS::LOOK_FOR_MORE_REALY::MN)
+				goto RN_CFG 
+			else 
+				goto ZONE_CFG
+
+		else if ( NOT Max attempts ) 
+			attempt++
+			goto RN_CFG_ACK
+		else 
+			Transmit : MN::RELAY_ADDR_CNF_FAIL::CMS
+			if ( CMS::LOOK_FOR_MORE_REALY::MN)
+				goto RN_CFG 
+			else 
+				goto ZONE_CFG
+
+//========================================================================================================================
+
+CFG_FN_MODE : 
+
+	FN_CHN_CHECK :	if( clear functional channel ) 
+				Store the channel info
+				goto STRT_FN_CFG
+			else if ( NOT max attempt) 
+				attempt++
+				goto FN_CHN_CHECK
+			else if ( all fn channel checked ) 
+				MN::ALL_FN_CHANNEL_JAM:CMS
+				goto WT_CMS_CMD
+			else
+				change to next channel
+				goto FN_CHN_CHECK
+
+
+	STRT_FN_CFG :	Transmit MN::FN_MODE_PARAMETER::BRDCST , goto STRT_FN_CFG_ERROR packet // Sent the channel number for the functional mode
+			goto WT_ACK_FROM_ZONE.
+
+
+	STRT_FN_CFG_ERROR : 
+			Error 
+			goto WT_CMS_CMD
+
+
+WT_ACK_FROM_ZONE : 	if( NOT all ack recieved ) 
+				if ( SN/RN::FN_MODE_CFG_ACK::MN_FIXED)
+					Transmit MN::FN_MODE_CFG_HOLD::BRDCST , goto errorxx // Stop all other/s to transmit 
+					register the ack for SN/RN of the ZONE
+					Transmit MN::ENTER_FN_MODE::SN/RN_FIXED
+					goto WT_ACK_FROM_ZONE
+				else if( NOT max attempt)
+					attempt++
+					goto STRT_FN_CFG
+				else 
+					Transmit MN::CFG_FN_FAIL_NO_ACK_FROM_ZONE::CMS
+					goto WT_CMS_CMD 
+			else 
+				Change the channel to the functional channel
+				goto WT_CMS_CMD
+			
+
+//========================================================================================================================
+TEST_ZONE_OFF : if(CMS::ZONE_OFF_TEST_START::MN_FIXED) 
+			Transmit MN::ALL_ZONE_LIGHT_OFF_TEST::BRDCST 
+			goto WT_ZONE_OFF_TEST_ACK
+		else if( NOT max attempt)
+			attempt++
+			goto TEST_ZONE_OFF
+		else 
+			Transmit MN::ZONE_OFF_TEST_NOT_DONE::CMS
+			goto TEST_ZONE_ON
+
+WT_ZONE_OFF_TEST_ACK : 	if( NOT all ack recieved ) 
+				if ( RN::ALL_ZONE_LIGHT_OFF_TEST_ACK::MN_FIXED)
+					register the ack for RN of the ZONE
+					goto WT_ZONE_OFF_TEST_ACK
+				else if( NOT max attempt)
+					attempt++
+					goto TEST_ZONE_OFF
+				else 
+					Transmit MN::ZONE_OFF_TEST_FAIL_NO_ACK_FROM_ZONE::CMS
+					goto TODO
+			else 
+				goto TEST_ZONE_ON
+
+//========================================================================================================================
+
+TEST_ZONE_ON : 	if(CMS::ZONE_ON_TEST_START::MN_FIXED) 
+
+			Transmit MN::ALL_ZONE_LIGHT_ON_TEST::BRDCST 
+			goto WT_ZONE_ON_TEST_ACK
+		else if( NOT max attempt)
+			attempt++
+			goto TEST_ZONE_ON
+		else 
+			Transmit MN::ZONE_ON_TEST_NOT_DONE::CMS
+			goto TEST_SINGLE_OFF
+
+WT_ZONE_ON_TEST_ACK : 	if( NOT all ack recieved ) 
+				if ( RN::ALL_ZONE_LIGHT_ON_TEST_ACK::MN_FIXED)
+					register the ack for RN of the ZONE
+					goto WT_ZONE_ON_TEST_ACK
+				else if( NOT max attempt)
+					attempt++
+					goto TEST_ZONE_ON
+				else 
+					Transmit MN::ZONE_ON_TEST_FAIL_NO_ACK_FROM_ZONE::CMS
+					goto TODO
+			else 
+				goto TEST_SINGLE_OFF
+
+//========================================================================================================================
+TEST_SINGLE_OFF : if(CMS::SINGLE_OFF_TEST_START::MN_FIXED) 
+			Transmit MN::SINGLE_LIGHT_OFF_TEST::RN_FIXED 
+			goto WT_SINGLE_OFF_TEST_ACK
+		else if( NOT max attempt)
+			attempt++
+			goto TEST_SINGLE_OFF
+		else 
+			Transmit MN::SINGLE_OFF_TEST_NOT_DONE::CMS
+			goto TEST_SINGLE_ON
+
+WT_SINGLE_OFF_TEST_ACK :if( NOT all ack recieved ) 
+				if ( RN::SINGLE_LIGHT_OFF_TEST_ACK::MN_FIXED)
+					register the ack for RN of the ZONE
+					goto WT_SINGLE_OFF_TEST_ACK
+				else if( NOT max attempt)
+					attempt++
+					goto TEST_SINGLE_OFF
+				else 
+					Transmit MN::SNGLE_OFF_TEST_FAIL_NO_ACK::CMS
+					goto END
+			else 
+				goto TEST_SINGLE_ON
+
+//========================================================================================================================
+TEST_SINGLE_ON : if(CMS::SINGLE_ON_TEST_START::MN_FIXED) 
+			Transmit MN::SINGLE_LIGHT_ON_TEST::RN_FIXED 
+			goto WT_SINGLE_ON_TEST_ACK
+		else if( NOT max attempt)
+			attempt++
+			goto TEST_SINGLE_ON
+		else 
+			Transmit MN::SINGLE_OFF_TEST_NOT_DONE::CMS
+			goto SENSOR_TEST
+
+WT_SINGLE_ON_TEST_ACK : if( NOT all ack recieved ) 
+				if ( RN::SINGLE_LIGHT_ON_TEST_ACK::MN_FIXED)
+					register the ack for RN of the ZONE
+					goto WT_ZONE_ON_TEST_ACK
+				else if( NOT max attempt)
+					attempt++
+					goto TEST_SINGLE_ON
+				else 
+					Transmit MN::SINGLE_ON_TEST_FAIL_NO_ACK::CMS
+					goto END
+			else 
+				goto SENSOR_TEST
+
+//========================================================================================================================
+
+SENSOR_TEST : 	if(SN::MOTION_DETECT_M1_M2::MN_FIXED)
+			Transmit MN::MOTION_DETECT_M1_M2_ACK::SN_FIXED
+			Transmit MN::SNESOR_TEST_M1_M2_DETECT_PASS::CMS
+			goto FN_MODE
+		else if (NOT max attempt ) 
+			attempt++
+			goto SENSOR_TEST
+		else 
+			Transmist MN::SENSOR_TEST_FAILED_NO_MOTION_DET::CMS
+			goto END
+			
+//========================================================================================================================
+
+FN_MODE :
+		if( SN::MOTION_DETECT_M1_M2::MN_FIXED)
+			if ( BAT_REQ_ON_NEXT_MOTION ) 
+				BAT_REQ_ON_NEXT_MOTION = 0
+				Transmit MN::MOTION_DETECT_M1_M2_ACK_BATTERY_STATUS::SN_FIXED
+			else
+				Transmit MN::MOTION_DETECT_M1_M2_ACK::SN_FIXED
+			
+			Transmit MN::ZONE_LIGHT_ON_FN::BRDCST
+			goto WT_ZONE_ON_FN_ACK
+
+		else if( CMS::REQUEST_BATTERY_STATUS::MN_FIXED)
+			BAT_REQ_ON_NEXT_MOTION == 1
+
+		goto FN_MODE
+
+WT_ZONE_ON_FN_ACK : 	if( NOT all ack recieved )
+ 	
+				if ( RN::LIGHT_ON_FN_ACK::MN_FIXED)
+					register the ack for RN of the ZONE
+					goto WT_ZONE_ON_FN_ACK
+				else if( NOT max attempt)
+					attempt++
+					Transmit MN::ZONE_LIGHT_ON_FN::BRDCST
+					goto WT_ZONE_ON_FN_ACK
+				else 
+					Transmit MN::ON_FN_FAIL_NO_ACK_FROM_ZONE::CMS
+					goto ZONE_OFF_FN
+			else 
+				goto ZONE_OFF_FN
+
+ZONE_OFF_FN :	if( Timer over ) 
+			Transmit MN::ZONE_LIGHT_OFF_FN::BRDCST
+			goto WT_ZONE_OFF_FN_ACK
+		else 
+			goto ZONE_OFF_FN 
+
+WT_ZONE_OFF_FN_ACK : 	if( NOT all ack recieved )
+ 	
+				if ( RN::LIGHT_OFF_FN_ACK::MN_FIXED)
+					register the ack for RN of the ZONE
+					goto WT_ZONE_OFF_FN_ACK
+				else if( NOT max attempt)
+					attempt++
+					Transmit MN::ZONE_LIGHT_OFF_FN::BRDCST
+					goto WT_ZONE_OFF_FN_ACK
+				else 
+					Transmit MN::OFF_FN_FAIL_NO_ACK_FROM_ZONE::CMS
+					goto ZONE_OFF_FN
+			else 
+				goto FN_MODE
+
+		
+
+If an iterrupt for the MOTION DETECT comes the timer gets reset
+
+
+
+
+//************************************************************************************************************************
+ZONE_CFG : 	if( CMS::SENSOR_ZONE_CFG::MN_FIXED ) 
+			Transmit MN::SENSOR_IDENTIFY::SN_FIXED
+			goto WT_SN_ZN_REQ
+		else if(CMS::RELAY_ZONE_CFG::MN_FIXED)
+			Transmit MN::RELAY_INDENTIFY::RN_FIXED)
+			goto WT_RN_ZN_REQ
+		else if(CMS::ZONE_CFG_OVER::MN_FIXED)
+			goto CFG_FN_MODE
+		else if( NOT max attempts )
+			goto ZONE_CFG
+		else
+			Transmit MN::ZONE_CONFIG_FAILED_NO_COMM::CMS
+			goto TODO
+
+//************************************************************************************************************************
+Functions 
+//************************************************************************************************************************
+
+Transmit(SRC::PACK_TYPE::DEST, JUMP_FAILED)   {
+
+CLR_CHN_CHK:	if(clear channel ) 
+			Tx SRC::PACK_TYPE::DEST
+		else if ( NOT maxt attempt ) 
+			attempt++
+			Random delay 
+			goto CLR_CHN_CHK
+		else 
+			Error with pack type
+			goto JUMP_FAILED
+
+}
+
+
