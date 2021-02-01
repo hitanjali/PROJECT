@@ -1,0 +1,72 @@
+Circuit : 
+
+
+			+5V 
+			|
+			|
+			R
+			|
+			|-------- V[photo] To Analog pin [ A0 ]
+		       /
+		      |    PT333-3C [ Everlight ]
+		       \
+		        |
+			|
+			|
+			GND
+
+
+================================================================================
+Experiment done near Window
+Time : 12:30PM
+LED FACING CEILING
+Photo transistor facing ceiling    [ Diffused ]
+Photo transistor 45 deg facing sky [ Direct Light ]
+Photo transistor covered by hand   [ Covered  ]
+================================================================================
+
+Sr no  	|  R	| V[photo] diffused	| V[photo]  covered	| V[photo] direct light	| 
+
+1.	| 8K	| 3.8V			| 4.9V			| 0.3V			|
+2.	| 10K	| 3.6V			| 4.9V			| 0.2V			|
+3.	| 22K	| 2.2V			| 4.9V			| 0.1V			|
+4.	| 33K	| 1.1V			| 4.9V			| 0.1V			|
+5.	| 82K	| 0.1V			| 4.9V			| 0.07V			|
+
+
+================================================================================
+Experiment done near Window
+Time : 12:30PM
+LED FACING FLOOR
+Photo transistor facing ceiling    [ Diffused ]
+Photo transistor 45 deg facing sky [ Direct Light ]
+Photo transistor covered by hand   [ Covered  ]
+================================================================================
+
+Sr no  	|  R	| V[photo] diffused	| V[photo]  covered	| V[photo] direct light	| 
+
+1.	| 8K	|    V			| 4.9V			|    V			|
+2.	| 10K	|    V			| 4.9V			|    V			|
+3.	| 22K	|    V			| 4.9V			|    V			|
+4.	| 33K	| 3.6V			| 4.9V			| 0.1V			|
+5.	| 82K	| 2.5V			| 4.9V			| 0.07V			|
+
+
+================================================================================
+Experiment done near Window
+Time : 12:30PM
+LED FACING OPP WINDOW
+Photo transistor facing ceiling    [ Diffused ]
+Photo transistor 45 deg facing sky [ Direct Light ]
+Photo transistor covered by hand   [ Covered  ]
+================================================================================
+
+Sr no  	|  R	| V[photo] diffused	| V[photo]  covered	| V[photo] direct light	| 
+
+1.	| 8K	|    V			| 4.9V			|    V			|
+2.	| 10K	|    V			| 4.9V			|    V			|
+3.	| 22K	|    V			| 4.9V			|    V			|
+4.	| 33K	| 3.3V			| 4.9V			| 0.1V			|
+5.	| 82K	| 0.4V			| 4.9V			| 0.07V			|
+
+
