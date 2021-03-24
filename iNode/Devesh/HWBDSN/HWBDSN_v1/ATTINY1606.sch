@@ -1,0 +1,560 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 2 4
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L Switch:SW_Push SW201
+U 1 1 6024E9CA
+P 5650 2550
+F 0 "SW201" V 5604 2698 50  0000 L CNN
+F 1 "SW_Push" V 5695 2698 50  0000 L CNN
+F 2 "Button_Switch_SMD:SW_SPST_CK_RS282G05A3" H 5650 2750 50  0001 C CNN
+F 3 "~" H 5650 2750 50  0001 C CNN
+F 4 "PTS636 SK50 SMTR LFS" H 5650 2550 50  0001 C CNN "MFPN"
+F 5 "C&K" H 5650 2550 50  0001 C CNN "Vendor"
+	1    5650 2550
+	0    1    1    0   
+$EndComp
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR0205
+U 1 1 6024E9CE
+P 5650 2950
+F 0 "#PWR0205" H 5650 2700 50  0001 C CNN
+F 1 "GND" H 5655 2777 50  0000 C CNN
+F 2 "" H 5650 2950 50  0001 C CNN
+F 3 "" H 5650 2950 50  0001 C CNN
+	1    5650 2950
+	1    0    0    -1  
+$EndComp
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR0206
+U 1 1 5FFD5545
+P 6550 6050
+F 0 "#PWR0206" H 6550 5800 50  0001 C CNN
+F 1 "GND" H 6555 5877 50  0000 C CNN
+F 2 "" H 6550 6050 50  0001 C CNN
+F 3 "" H 6550 6050 50  0001 C CNN
+	1    6550 6050
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:LED D201
+U 1 1 6024E9CC
+P 6550 5650
+F 0 "D201" V 6589 5532 50  0000 R CNN
+F 1 "LED_RED" H 6498 5532 50  0000 R CNN
+F 2 "LED_SMD:LED_0603_1608Metric" H 6550 5650 50  0001 C CNN
+F 3 "~" H 6550 5650 50  0001 C CNN
+F 4 "LTST-C190KRKT" H 6550 5650 50  0001 C CNN "MFPN"
+F 5 "Lite-On" H 6550 5650 50  0001 C CNN "Vendor"
+	1    6550 5650
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	6550 5200 6550 5500
+Wire Wire Line
+	6550 5800 6550 6050
+$Comp
+L Device:R_Small_US R202
+U 1 1 5FFD5539
+P 6550 5100
+F 0 "R202" H 6618 5146 50  0000 L CNN
+F 1 "2.2K" H 6618 5055 50  0000 L CNN
+F 2 "Resistor_SMD:R_0603_1608Metric" H 6550 5100 50  0001 C CNN
+F 3 "~" H 6550 5100 50  0001 C CNN
+F 4 "CR0603-JW-222ELF" H 6550 5100 50  0001 C CNN "MFPN"
+F 5 "Bornus" H 6550 5100 50  0001 C CNN "Vendor"
+	1    6550 5100
+	1    0    0    -1  
+$EndComp
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR0207
+U 1 1 6024E9D1
+P 6900 6050
+F 0 "#PWR0207" H 6900 5800 50  0001 C CNN
+F 1 "GND" H 6905 5877 50  0000 C CNN
+F 2 "" H 6900 6050 50  0001 C CNN
+F 3 "" H 6900 6050 50  0001 C CNN
+	1    6900 6050
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:LED D202
+U 1 1 6024E9D2
+P 6900 5650
+F 0 "D202" V 6939 5532 50  0000 R CNN
+F 1 "LED_YELLOW" H 6848 5532 50  0000 R CNN
+F 2 "LED_SMD:LED_0603_1608Metric" H 6900 5650 50  0001 C CNN
+F 3 "~" H 6900 5650 50  0001 C CNN
+F 4 "LTST-C190YKT" H 6900 5650 50  0001 C CNN "MFPN"
+F 5 "Lite-On" H 6900 5650 50  0001 C CNN "Vendor"
+	1    6900 5650
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	6900 5200 6900 5500
+Wire Wire Line
+	6900 5800 6900 6050
+$Comp
+L Device:R_Small_US R203
+U 1 1 5FFE5DBB
+P 6900 5100
+F 0 "R203" H 6968 5146 50  0000 L CNN
+F 1 "2.2K" H 6968 5055 50  0000 L CNN
+F 2 "Resistor_SMD:R_0603_1608Metric" H 6900 5100 50  0001 C CNN
+F 3 "~" H 6900 5100 50  0001 C CNN
+F 4 "CR0603-JW-222ELF" H 6900 5100 50  0001 C CNN "MFPN"
+F 5 "Bornus" H 6900 5100 50  0001 C CNN "Vendor"
+	1    6900 5100
+	1    0    0    -1  
+$EndComp
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR0208
+U 1 1 6024E9D4
+P 7250 6050
+F 0 "#PWR0208" H 7250 5800 50  0001 C CNN
+F 1 "GND" H 7255 5877 50  0000 C CNN
+F 2 "" H 7250 6050 50  0001 C CNN
+F 3 "" H 7250 6050 50  0001 C CNN
+	1    7250 6050
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:LED D203
+U 1 1 6024E9D5
+P 7250 5650
+F 0 "D203" V 7289 5532 50  0000 R CNN
+F 1 "LED_GREEN" H 7198 5532 50  0000 R CNN
+F 2 "LED_SMD:LED_0603_1608Metric" H 7250 5650 50  0001 C CNN
+F 3 "~" H 7250 5650 50  0001 C CNN
+F 4 "LTST-C190KGKT" H 7250 5650 50  0001 C CNN "MFPN"
+F 5 "Lite-On" H 7250 5650 50  0001 C CNN "Vendor"
+	1    7250 5650
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	7250 5200 7250 5500
+Wire Wire Line
+	7250 5800 7250 6050
+$Comp
+L Device:R_Small_US R204
+U 1 1 5FFE6F95
+P 7250 5100
+F 0 "R204" H 7318 5146 50  0000 L CNN
+F 1 "2.2K" H 7318 5055 50  0000 L CNN
+F 2 "Resistor_SMD:R_0603_1608Metric" H 7250 5100 50  0001 C CNN
+F 3 "~" H 7250 5100 50  0001 C CNN
+F 4 "CR0603-JW-222ELF" H 7250 5100 50  0001 C CNN "MFPN"
+F 5 "Bornus" H 7250 5100 50  0001 C CNN "Vendor"
+	1    7250 5100
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6550 4750 6550 5000
+Wire Wire Line
+	6900 4650 6900 5000
+Wire Wire Line
+	7250 4550 7250 5000
+Wire Wire Line
+	5650 2250 5650 2350
+Text Label 5100 2250 0    50   ~ 0
+RESETn_UPDI
+Text Label 6250 4750 0    50   ~ 0
+RED
+Text Label 6250 4650 0    50   ~ 0
+YELLOW
+Text Label 6250 4550 0    50   ~ 0
+GREEN
+Wire Wire Line
+	6150 4650 6900 4650
+Wire Wire Line
+	6150 4550 7250 4550
+Wire Wire Line
+	6550 4750 6150 4750
+Text Notes 2800 6350 0    50   ~ 0
+Page 475 of ATTINY for clock frequecy\nADC internal ref for power monitoring \nDevice can work at 1.8-5.5 V\n\nAdditional PWR and GND pins for external connetions\n\nPush button on GPIO
+Wire Wire Line
+	2850 2450 2850 2650
+$Comp
+L Device:C_Small C201
+U 1 1 6024E9C8
+P 2850 2350
+F 0 "C201" V 2900 2100 50  0000 L CNN
+F 1 "0.1uF, 10V" V 2750 2050 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0402_1005Metric" H 2850 2350 50  0001 C CNN
+F 3 "~" H 2850 2350 50  0001 C CNN
+F 4 "CC0402JRX5R6BB104 " H 2850 2350 50  0001 C CNN "MFPN"
+F 5 "Yageo" H 2850 2350 50  0001 C CNN "Vendor"
+	1    2850 2350
+	1    0    0    -1  
+$EndComp
+$Comp
+L MCU_Microchip_ATtiny:ATtiny1606-M U201
+U 1 1 6024E9C5
+P 3300 3700
+F 0 "U201" H 3650 4550 50  0000 C CNN
+F 1 "ATtiny1606-M" V 3300 3700 50  0000 C CNN
+F 2 "Package_DFN_QFN:VQFN-20-1EP_3x3mm_P0.4mm_EP1.7x1.7mm_ThermalVias" H 3300 3700 50  0001 C CIN
+F 3 "http://ww1.microchip.com/downloads/en/DeviceDoc/ATtiny806_1606_Data_Sheet_40002029A.pdf" H 3300 3700 50  0001 C CNN
+F 4 "ATTINY1606-MN" H 3300 3700 50  0001 C CNN "MFPN"
+F 5 "Microchip" H 3300 3700 50  0001 C CNN "Vendor"
+	1    3300 3700
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	8800 2450 9100 2450
+Wire Wire Line
+	8800 2350 8800 2450
+$Comp
+L hwbdsn_v1.1-rescue:TPS78230DDC-Regulator_Linear U202
+U 1 1 601F6F45
+P 9400 2450
+AR Path="/601F6F45" Ref="U202"  Part="1" 
+AR Path="/6001F811/601F6F45" Ref="U202"  Part="1" 
+F 0 "U202" H 9400 2817 50  0000 C CNN
+F 1 "AP7351D-30W5-7" H 9400 2726 50  0000 C CNN
+F 2 "Package_TO_SOT_SMD:SOT-23-5" H 9400 2800 50  0001 C CNN
+F 3 "http://www.ti.com/lit/gpn/tps782" H 9400 2950 50  0001 C CNN
+F 4 "AP7351D-30WS-7" H 9400 2817 50  0001 C CNN "MFPN"
+F 5 " Diodes Inc." H 9400 2726 50  0001 C CNN "Vendor"
+	1    9400 2450
+	1    0    0    -1  
+$EndComp
+Text HLabel 5000 4300 2    50   Input ~ 0
+PIR_3
+Wire Wire Line
+	3900 4000 4350 4000
+Wire Wire Line
+	3900 4300 5000 4300
+Wire Wire Line
+	3900 4200 5000 4200
+Wire Wire Line
+	3900 4100 5000 4100
+Wire Wire Line
+	3900 3900 4350 3900
+Wire Wire Line
+	2700 3900 2250 3900
+Text Label 8550 4300 0    50   ~ 0
+RXD
+Text Label 8550 4200 0    50   ~ 0
+TXD
+Text Label 4000 4200 0    50   ~ 0
+RXD
+Text Label 4000 4100 0    50   ~ 0
+TXD
+Wire Wire Line
+	9800 4300 8350 4300
+Wire Wire Line
+	9800 4200 8350 4200
+Wire Wire Line
+	8800 2350 9100 2350
+Connection ~ 8800 2350
+Wire Wire Line
+	8500 2000 8500 2350
+Wire Wire Line
+	9250 2000 8500 2000
+$Comp
+L Connector_Generic:Conn_01x02 J203
+U 1 1 6024E9D8
+P 7800 2450
+F 0 "J203" H 8000 2450 50  0000 L CNN
+F 1 "Conn_01x02" V 7900 2150 50  0000 L CNN
+F 2 "Connector_JST:JST_EH_B2B-EH-A_1x02_P2.50mm_Vertical" H 7800 2450 50  0001 C CNN
+F 3 "~" H 7800 2450 50  0001 C CNN
+F 4 "B2B-EH-A(LF)(SN)" H 7800 2450 50  0001 C CNN "MFPN"
+F 5 "JST" H 7800 2450 50  0001 C CNN "Vendor"
+	1    7800 2450
+	-1   0    0    1   
+$EndComp
+Text HLabel 2250 3900 0    50   Input ~ 0
+PIR_2
+Text HLabel 2250 4000 0    50   Input ~ 0
+PIR_1
+Text HLabel 4350 4000 2    50   Output ~ 0
+TO_PHOTOTRANS
+Text Label 4000 3900 0    50   ~ 0
+ALS
+Text HLabel 4350 3900 2    50   Input ~ 0
+ALS
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR?
+U 1 1 5FFFB528
+P 9400 3000
+AR Path="/5FFFB528" Ref="#PWR?"  Part="1" 
+AR Path="/5FED4AD5/5FFFB528" Ref="#PWR?"  Part="1" 
+AR Path="/5FFE69F0/5FFFB528" Ref="#PWR?"  Part="1" 
+AR Path="/6001F811/5FFFB528" Ref="#PWR0102"  Part="1" 
+F 0 "#PWR0102" H 9400 2750 50  0001 C CNN
+F 1 "GND" H 9405 2827 50  0000 C CNN
+F 2 "" H 9400 3000 50  0001 C CNN
+F 3 "" H 9400 3000 50  0001 C CNN
+	1    9400 3000
+	-1   0    0    -1  
+$EndComp
+Text Label 8650 2000 0    50   ~ 0
+PWR_MONITOR
+Wire Wire Line
+	3300 2150 3300 2800
+Connection ~ 3300 2150
+Wire Wire Line
+	2850 2150 2850 2250
+Wire Wire Line
+	3300 2000 3300 2150
+Wire Wire Line
+	2850 2150 3300 2150
+Text Label 2550 3900 2    50   ~ 0
+PIR_2
+Text Label 2350 4000 0    50   ~ 0
+PIR_1
+Wire Wire Line
+	2700 4000 2250 4000
+Wire Wire Line
+	2700 4200 2250 4200
+Wire Wire Line
+	2700 4100 2250 4100
+Text HLabel 2250 4100 0    50   Input ~ 0
+GDO0
+Text HLabel 2250 4200 0    50   Input ~ 0
+GDO2
+Wire Wire Line
+	3900 3500 5000 3500
+Text Label 4000 3500 0    50   ~ 0
+PWR_MONITOR
+Text Label 2400 4200 0    50   ~ 0
+GDO2
+Text Label 2400 4100 0    50   ~ 0
+GDO0
+Text HLabel 4350 3400 2    50   Output ~ 0
+CSn
+Text HLabel 4350 3300 2    50   Output ~ 0
+SCK
+Text HLabel 4350 3200 2    50   Input ~ 0
+MISO
+Text HLabel 4350 3100 2    50   Output ~ 0
+MOSI
+Text Label 4000 3400 0    50   ~ 0
+CSn
+Text Label 4000 3300 0    50   ~ 0
+SCK
+Text Label 4000 3200 0    50   ~ 0
+MISO
+Text Label 4000 3100 0    50   ~ 0
+MOSI
+Text Label 4000 4400 0    50   ~ 0
+GREEN
+Text Label 4000 3700 0    50   ~ 0
+YELLOW
+Text Label 4000 3600 0    50   ~ 0
+RED
+Wire Wire Line
+	3900 3000 4650 3000
+Text Label 4150 3000 0    50   ~ 0
+RESETn_UPDI
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR0201
+U 1 1 5FFBA41F
+P 2850 2650
+F 0 "#PWR0201" H 2850 2400 50  0001 C CNN
+F 1 "GND" H 2855 2477 50  0000 C CNN
+F 2 "" H 2850 2650 50  0001 C CNN
+F 3 "" H 2850 2650 50  0001 C CNN
+	1    2850 2650
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3300 4600 3300 4850
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR0203
+U 1 1 5FFB059C
+P 3300 4850
+F 0 "#PWR0203" H 3300 4600 50  0001 C CNN
+F 1 "GND" H 3305 4677 50  0000 C CNN
+F 2 "" H 3300 4850 50  0001 C CNN
+F 3 "" H 3300 4850 50  0001 C CNN
+	1    3300 4850
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3900 3100 4350 3100
+Wire Wire Line
+	3900 3200 4350 3200
+Wire Wire Line
+	3900 3300 4350 3300
+Wire Wire Line
+	3900 3400 4350 3400
+Wire Wire Line
+	3900 3600 4350 3600
+Wire Wire Line
+	3900 3700 4350 3700
+Wire Wire Line
+	3900 4400 4350 4400
+$Comp
+L Device:C_Small C203
+U 1 1 6040B634
+P 10050 2650
+F 0 "C203" V 10100 2400 50  0000 L CNN
+F 1 "0.1uF, 10V" V 9950 2350 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0402_1005Metric" H 10050 2650 50  0001 C CNN
+F 3 "~" H 10050 2650 50  0001 C CNN
+F 4 "CC0402JRX5R6BB104 " H 10050 2650 50  0001 C CNN "MFPN"
+F 5 "Yageo" H 10050 2650 50  0001 C CNN "Vendor"
+	1    10050 2650
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:C_Small C202
+U 1 1 6040CA9C
+P 8500 2650
+F 0 "C202" V 8550 2400 50  0000 L CNN
+F 1 "0.1uF, 10V" V 8400 2350 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0402_1005Metric" H 8500 2650 50  0001 C CNN
+F 3 "~" H 8500 2650 50  0001 C CNN
+F 4 "CC0402JRX5R6BB104 " H 8500 2650 50  0001 C CNN "MFPN"
+F 5 "Yageo" H 8500 2650 50  0001 C CNN "Vendor"
+	1    8500 2650
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	9400 2750 9400 2900
+Wire Wire Line
+	10050 2900 9400 2900
+Connection ~ 9400 2900
+Wire Wire Line
+	9400 2900 9400 3000
+Wire Wire Line
+	10050 2550 10050 2350
+Wire Wire Line
+	10050 2750 10050 2900
+Wire Wire Line
+	9400 2900 8500 2900
+Wire Wire Line
+	8500 2900 8500 2750
+Wire Wire Line
+	8500 2550 8500 2350
+Connection ~ 8500 2350
+Wire Wire Line
+	8500 2350 8800 2350
+Wire Wire Line
+	9700 2350 10050 2350
+Wire Wire Line
+	10050 2100 10050 2350
+Connection ~ 10050 2350
+Wire Wire Line
+	8000 2450 8000 2900
+Wire Wire Line
+	8000 2900 8500 2900
+Connection ~ 8500 2900
+Wire Wire Line
+	8000 2350 8500 2350
+$Comp
+L Connector_Generic:Conn_01x03 J201
+U 1 1 60325ABA
+P 4900 2250
+F 0 "J201" H 4818 1925 50  0000 C CNN
+F 1 "Conn_01x03" H 4818 2016 50  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical" H 4900 2250 50  0001 C CNN
+F 3 "~" H 4900 2250 50  0001 C CNN
+	1    4900 2250
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	5400 1850 5400 2150
+Wire Wire Line
+	5100 2350 5400 2350
+Wire Wire Line
+	5100 2250 5650 2250
+Connection ~ 5650 2250
+Wire Wire Line
+	5650 2250 5900 2250
+Wire Wire Line
+	5100 2150 5400 2150
+Wire Wire Line
+	5650 2750 5650 2950
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR0104
+U 1 1 60344BAC
+P 5400 2750
+F 0 "#PWR0104" H 5400 2500 50  0001 C CNN
+F 1 "GND" H 5405 2577 50  0000 C CNN
+F 2 "" H 5400 2750 50  0001 C CNN
+F 3 "" H 5400 2750 50  0001 C CNN
+	1    5400 2750
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5400 2350 5400 2750
+$Comp
+L Connector_Generic:Conn_01x03 J202
+U 1 1 60353882
+P 10000 4300
+F 0 "J202" H 10080 4342 50  0000 L CNN
+F 1 "Conn_01x03" H 10080 4251 50  0000 L CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical" H 10000 4300 50  0001 C CNN
+F 3 "~" H 10000 4300 50  0001 C CNN
+	1    10000 4300
+	1    0    0    -1  
+$EndComp
+$Comp
+L hwbdsn_v1.1-rescue:GND-hitesh_custom #PWR?
+U 1 1 603567E0
+P 9650 4750
+AR Path="/603567E0" Ref="#PWR?"  Part="1" 
+AR Path="/5FED4AD5/603567E0" Ref="#PWR?"  Part="1" 
+AR Path="/5FFE69F0/603567E0" Ref="#PWR?"  Part="1" 
+AR Path="/6001F811/603567E0" Ref="#PWR0105"  Part="1" 
+F 0 "#PWR0105" H 9650 4500 50  0001 C CNN
+F 1 "GND" H 9655 4577 50  0000 C CNN
+F 2 "" H 9650 4750 50  0001 C CNN
+F 3 "" H 9650 4750 50  0001 C CNN
+	1    9650 4750
+	-1   0    0    -1  
+$EndComp
+Wire Wire Line
+	9800 4400 9650 4400
+Wire Wire Line
+	9650 4400 9650 4750
+$Comp
+L power:+3V0 #PWR0101
+U 1 1 6039FA91
+P 3300 2000
+F 0 "#PWR0101" H 3300 1850 50  0001 C CNN
+F 1 "+3V0" H 3300 2150 50  0000 C CNN
+F 2 "" H 3300 2000 50  0001 C CNN
+F 3 "" H 3300 2000 50  0001 C CNN
+	1    3300 2000
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:+3V0 #PWR0103
+U 1 1 603A1354
+P 5400 1850
+F 0 "#PWR0103" H 5400 1700 50  0001 C CNN
+F 1 "+3V0" H 5415 2023 50  0000 C CNN
+F 2 "" H 5400 1850 50  0001 C CNN
+F 3 "" H 5400 1850 50  0001 C CNN
+	1    5400 1850
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:+3V0 #PWR0106
+U 1 1 603A170F
+P 10050 2100
+F 0 "#PWR0106" H 10050 1950 50  0001 C CNN
+F 1 "+3V0" H 10065 2273 50  0000 C CNN
+F 2 "" H 10050 2100 50  0001 C CNN
+F 3 "" H 10050 2100 50  0001 C CNN
+	1    10050 2100
+	1    0    0    -1  
+$EndComp
+$EndSCHEMATC
