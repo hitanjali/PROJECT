@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name hwbdsn_pir-rescue)(type Legacy)(uri ${KIPRJMOD}/hwbdsn_pir-rescue.lib)(options "")(descr ""))
+)

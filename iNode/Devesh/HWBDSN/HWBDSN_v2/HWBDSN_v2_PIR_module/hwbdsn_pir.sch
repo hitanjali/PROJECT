@@ -1,0 +1,108 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L hwbdsn_pir-rescue:Senba_digital_PIR_XX312-hitesh_custom U1
+U 1 1 60417690
+P 5950 3000
+F 0 "U1" V 6400 3150 50  0000 L CNN
+F 1 "Senba_digital_PIR_XX312" V 5900 3000 50  0000 L CNN
+F 2 "mylib:Senba_Digital_PIR_XX312" H 6100 2850 50  0001 C CNN
+F 3 "" H 6100 2850 50  0001 C CNN
+F 4 "Senba" H 5950 3000 50  0001 C CNN "Vendor"
+F 5 "HM312" H 5950 3000 50  0001 C CNN "MFPN"
+	1    5950 3000
+	0    1    1    0   
+$EndComp
+$Comp
+L hwbdsn_pir-rescue:PIR_Lens_23mm-hitesh_custom LENS1
+U 1 1 60417C6E
+P 6200 3250
+F 0 "LENS1" V 6300 3150 50  0000 R CNN
+F 1 "PIR_Lens_23mm" V 6400 3450 50  0000 R CNN
+F 2 "mylib:FRESNEL_LENS_S9006" H 6200 3250 50  0001 C CNN
+F 3 "" H 6200 3250 50  0001 C CNN
+F 4 "S9006" H 6200 3250 50  0001 C CNN "MFPN"
+F 5 "Senba" H 6200 3250 50  0001 C CNN "Vendor"
+	1    6200 3250
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x03 J1
+U 1 1 604182E4
+P 5000 3200
+F 0 "J1" H 5080 3242 50  0000 L CNN
+F 1 "Conn_01x04" H 5080 3151 50  0000 L CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical" H 5000 3200 50  0001 C CNN
+F 3 "~" H 5000 3200 50  0001 C CNN
+F 4 "genric" H 5000 3200 50  0001 C CNN "MFPN"
+F 5 "genric" H 5000 3200 50  0001 C CNN "Vendor"
+	1    5000 3200
+	-1   0    0    -1  
+$EndComp
+Wire Wire Line
+	5200 3300 5850 3300
+Wire Wire Line
+	5200 3200 5850 3200
+Wire Wire Line
+	5200 3100 5850 3100
+Text Label 5350 3100 0    50   ~ 0
+VDD
+Text Label 5350 3200 0    50   ~ 0
+DOUT
+Text Label 5350 3300 0    50   ~ 0
+GND
+$Comp
+L Device:R_PHOTO R1
+U 1 1 6054877F
+P 5300 4750
+F 0 "R1" H 5370 4796 50  0000 L CNN
+F 1 "R_PHOTO" H 5370 4705 50  0000 L CNN
+F 2 "Resistor_SMD:R_0805_2012Metric" V 5350 4500 50  0001 L CNN
+F 3 "~" H 5300 4700 50  0001 C CNN
+F 4 "SFH3711" H 5300 4750 50  0001 C CNN "MFPN"
+F 5 "OSRAM" H 5300 4750 50  0001 C CNN "Vendor"
+	1    5300 4750
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5300 4600 5300 4300
+$Comp
+L power:GND #PWR0101
+U 1 1 60549DAF
+P 5300 5200
+F 0 "#PWR0101" H 5300 4950 50  0001 C CNN
+F 1 "GND" H 5305 5027 50  0000 C CNN
+F 2 "" H 5300 5200 50  0001 C CNN
+F 3 "" H 5300 5200 50  0001 C CNN
+	1    5300 5200
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5300 5200 5300 4900
+$Comp
+L Connector_Generic:Conn_01x01 J2
+U 1 1 605BADCD
+P 5300 4100
+F 0 "J2" V 5264 4012 50  0000 R CNN
+F 1 "Conn_01x01" V 5173 4012 50  0000 R CNN
+F 2 "" H 5300 4100 50  0001 C CNN
+F 3 "~" H 5300 4100 50  0001 C CNN
+F 4 "genric" H 5300 4100 50  0001 C CNN "MFPN"
+F 5 "genric" H 5300 4100 50  0001 C CNN "Vendor"
+	1    5300 4100
+	0    -1   -1   0   
+$EndComp
+$EndSCHEMATC
